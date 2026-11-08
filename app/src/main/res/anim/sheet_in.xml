@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 底部 sheet：从下方弹入 + 淡入，跟网页 .sheet 的 cubic-bezier(.22,.9,.28,1) 观感一致 -->
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:interpolator="@android:anim/decelerate_interpolator">
+    <translate
+        android:fromYDelta="100%p"
+        android:toYDelta="0"
+        android:duration="300" />
+    <alpha
+        android:fromAlpha="0.35"
+        android:toAlpha="1"
+        android:duration="220" />
+</set>

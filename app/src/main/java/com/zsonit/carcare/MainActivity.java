@@ -1,0 +1,431 @@
+package com.zsonit.carcare;
+
+import android.Manifest;
+import android.annotation.SuppressLint;
+import android.app.Activity;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.graphics.Color;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.Parcelable;
+import android.provider.MediaStore;
+import android.util.Log;
+import android.view.KeyEvent;
+import android.view.View;
+import android.view.WindowInsets;
+import android.view.WindowManager;
+import android.webkit.ConsoleMessage;
+import android.webkit.JsPromptResult;
+import android.webkit.JsResult;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
+
+import java.io.File;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+
+/**
+ * 车管家 Android 版：原生外壳 + WebView（内置与 iOS 版同一套页面）+ 原生能力桥接。
+ *
+ * 页面由内置的本机 HTTP 服务提供（http://127.0.0.1:PORT），与 iOS 版同源策略一致，
+ * localStorage / fetch 行为、NAS 局域网访问都和浏览器版完全一样。
+ */
+public class MainActivity extends Activity {
+
+    private static final String TAG = "CarCare";
+    private static final int REQ_FILE = 1001;
+    private static final int REQ_NOTIF = 1003;
+
+    private WebView web;
+    private LocalAssetServer server;
+    private CarBridge bridge;
+    private FrameLayout root;
+
+    /** 挂起的网页文件选择回调（WebView 要求必须回调，否则网页控件卡死） */
+    private ValueCallback<Uri[]> pendingFileCallback;
+    private Uri pendingCameraUri;
+
+    @SuppressLint("SetJavaScriptEnabled")
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        root = findViewById(R.id.root);
+        web = findViewById(R.id.web);
+
+        // 崩溃日志落盘（App 专属目录，USB 可见），便于远程排障
+        final Thread.UncaughtExceptionHandler prev = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+            try {
+                File dir = getExternalFilesDir("crash");
+                if (dir != null) {
+                    java.io.PrintWriter w = new java.io.PrintWriter(new File(dir, "crash.txt"), "UTF-8");
+                    e.printStackTrace(w);
+                    w.close();
+                }
+            } catch (Exception ignored) {
+            }
+            if (prev != null) prev.uncaughtException(t, e);
+        });
+
+        CarBridge.createChannel(this);
+        setupEdgeToEdge();
+        setupWeb();
+        bridge = new CarBridge(this, web);
+        web.addJavascriptInterface(bridge, "CarCareAndroid");
+
+        startServerAndLoad();
+    }
+
+    // ------------------------------------------------------------ 窗口
+
+    private void setupEdgeToEdge() {
+        getWindow().setStatusBarColor(Color.TRANSPARENT);
+        getWindow().setNavigationBarColor(Color.TRANSPARENT);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            getWindow().setDecorFitsSystemWindows(false);
+            android.view.WindowInsetsController c = getWindow().getInsetsController();
+            if (c != null) {
+                c.setSystemBarsAppearance(
+                        android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                                | android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
+                        android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                                | android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS);
+            }
+        } else {
+            int flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+            }
+            getWindow().getDecorView().setSystemUiVisibility(flags);
+        }
+
+        root.setOnApplyWindowInsetsListener((v, insets) -> {
+            int top;
+            int bottom;
+            int ime = 0;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
+                top = bars.top;
+                bottom = bars.bottom;
+                ime = insets.getInsets(WindowInsets.Type.ime()).bottom;
+            } else {
+                top = insets.getSystemWindowInsetTop();
+                bottom = insets.getSystemWindowInsetBottom();
+            }
+            if (bridge != null) {
+                bridge.setInsets(top, bottom);
+                evaluateJs("window.__ccApplyInsets&&window.__ccApplyInsets()");
+            }
+            // 键盘：边到边后系统不再自动压缩窗口，用内边距让出键盘高度
+            web.setPadding(0, 0, 0, ime > bottom ? ime - bottom : 0);
+            return insets;
+        });
+    }
+
+    // ------------------------------------------------------------ WebView
+
+    private void setupWeb() {
+        WebSettings s = web.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        s.setDatabaseEnabled(true);
+        s.setTextZoom(100);
+        s.setSupportZoom(false);
+        s.setBuiltInZoomControls(false);
+        s.setDisplayZoomControls(false);
+        s.setLoadWithOverviewMode(false);
+        s.setUseWideViewPort(false);
+        s.setMediaPlaybackRequiresUserGesture(false);
+        s.setAllowFileAccess(false);
+        s.setAllowContentAccess(true);
+        // NAS 同步要访问局域网 http 地址
+        s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+                && Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            //noinspection deprecation
+            s.setForceDark(WebSettings.FORCE_DARK_OFF);
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            s.setAlgorithmicDarkeningAllowed(false);
+        }
+        web.setBackgroundColor(Color.TRANSPARENT);
+        web.setOverScrollMode(View.OVER_SCROLL_NEVER);
+
+        web.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                Uri url = request.getUrl();
+                String scheme = url.getScheme() == null ? "" : url.getScheme();
+                String host = url.getHost() == null ? "" : url.getHost();
+                if (("http".equals(scheme) || "https".equals(scheme))
+                        && ("127.0.0.1".equals(host) || "localhost".equals(host))) {
+                    return false;
+                }
+                if ("http".equals(scheme) || "https".equals(scheme)) {
+                    try {
+                        startActivity(new Intent(Intent.ACTION_VIEW, url));
+                    } catch (Exception ignored) {
+                    }
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                // 页面就绪后补一次安全区与通知权限状态
+                evaluateJs("window.__ccApplyInsets&&window.__ccApplyInsets()");
+                if (notificationsGranted()) {
+                    evaluateJs("window.__ccNotifyPermission&&window.__ccNotifyPermission('granted')");
+                }
+            }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request,
+                                        android.webkit.WebResourceError error) {
+                if (request.isForMainFrame()) {
+                    Log.w(TAG, "main frame error: " + error.getDescription());
+                }
+            }
+        });
+
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onConsoleMessage(ConsoleMessage m) {
+                Log.i(TAG, "js: " + m.message() + " @" + m.lineNumber());
+                return true;
+            }
+
+            @Override
+            public boolean onJsAlert(WebView view, String url, String message, JsResult result) {
+                GlassDialog.alert(MainActivity.this, message, result::confirm);
+                return true;
+            }
+
+            @Override
+            public boolean onJsConfirm(WebView view, String url, String message, JsResult result) {
+                boolean destructive = message != null
+                        && (message.contains("删除") || message.contains("清空") || message.contains("不可恢复"));
+                GlassDialog.confirm(MainActivity.this, message, destructive, ok -> {
+                    if (ok) {
+                        result.confirm();
+                    } else {
+                        result.cancel();
+                    }
+                });
+                return true;
+            }
+
+            @Override
+            public boolean onJsPrompt(WebView view, String url, String message,
+                                      String defaultValue, JsPromptResult result) {
+                GlassDialog.prompt(MainActivity.this, message, defaultValue, text -> {
+                    if (text == null) {
+                        result.cancel();
+                    } else {
+                        result.confirm(text);
+                    }
+                });
+                return true;
+            }
+
+            @Override
+            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> callback,
+                                             FileChooserParams params) {
+                if (pendingFileCallback != null) {
+                    pendingFileCallback.onReceiveValue(null);
+                }
+                pendingFileCallback = callback;
+                try {
+                    startActivityForResult(buildFileChooserIntent(params), REQ_FILE);
+                } catch (Exception e) {
+                    Log.w(TAG, "file chooser failed", e);
+                    pendingFileCallback = null;
+                    callback.onReceiveValue(null);
+                }
+                return true;
+            }
+        });
+    }
+
+    private void startServerAndLoad() {
+        server = new LocalAssetServer(this);
+        int port = server.start();
+        if (port <= 0) {
+            GlassDialog.alert(this, "本地服务启动失败，请重启应用", null);
+            return;
+        }
+        web.loadUrl("http://127.0.0.1:" + port + "/index.html");
+    }
+
+    void evaluateJs(String js) {
+        if (web == null) return;
+        runOnUiThread(() -> {
+            try {
+                web.evaluateJavascript(js, null);
+            } catch (Exception ignored) {
+            }
+        });
+    }
+
+    // ------------------------------------------------------------ 通知权限
+
+    boolean notificationsGranted() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true;
+        return checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                == PackageManager.PERMISSION_GRANTED;
+    }
+
+    void requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            if (bridge != null) bridge.onNotificationPermission(true);
+            return;
+        }
+        if (notificationsGranted()) {
+            if (bridge != null) bridge.onNotificationPermission(true);
+            return;
+        }
+        requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIF);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQ_NOTIF) {
+            boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+            if (bridge != null) bridge.onNotificationPermission(granted);
+        }
+    }
+
+    // ------------------------------------------------------------ 文件选择 / 拍照
+
+    private Intent buildFileChooserIntent(WebChromeClient.FileChooserParams params) {
+        String[] accept = params != null ? params.getAcceptTypes() : null;
+        String type = accept != null && accept.length > 0 ? accept[0] : "";
+        boolean isImage = type != null && type.contains("image");
+
+        Intent content = new Intent(Intent.ACTION_GET_CONTENT);
+        content.addCategory(Intent.CATEGORY_OPENABLE);
+        content.setType(isImage ? "image/*" : "*/*");
+
+        if (!isImage) {
+            return Intent.createChooser(content, "选择文件");
+        }
+        Intent chooser = Intent.createChooser(content, "选择图片或拍照");
+        Intent camera = buildCameraIntent();
+        if (camera != null) {
+            chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, new Parcelable[]{camera});
+        }
+        return chooser;
+    }
+
+    private Intent buildCameraIntent() {
+        try {
+            String name = "carcare_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
+                    .format(new Date()) + ".jpg";
+            File photo = ShareProvider.fileFor(this, name);
+            pendingCameraUri = ShareProvider.uriFor(this, photo);
+
+            Intent camera = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+            camera.putExtra(MediaStore.EXTRA_OUTPUT, pendingCameraUri);
+            camera.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            if (camera.resolveActivity(getPackageManager()) == null) {
+                return null;
+            }
+            return camera;
+        } catch (Exception e) {
+            Log.w(TAG, "camera intent failed", e);
+            return null;
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == 2001) { // 保存到「文件」
+            if (bridge != null) bridge.onSaveResult(resultCode, data);
+            return;
+        }
+        if (requestCode != REQ_FILE) {
+            super.onActivityResult(requestCode, resultCode, data);
+            return;
+        }
+        ValueCallback<Uri[]> callback = pendingFileCallback;
+        pendingFileCallback = null;
+        if (callback == null) return;
+
+        if (resultCode == RESULT_OK && data == null && pendingCameraUri != null) {
+            callback.onReceiveValue(new Uri[]{pendingCameraUri});
+            pendingCameraUri = null;
+            return;
+        }
+        pendingCameraUri = null;
+        if (resultCode != RESULT_OK || data == null) {
+            callback.onReceiveValue(null);
+            return;
+        }
+        Uri[] result = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
+        if (result == null && data.getData() != null) {
+            result = new Uri[]{data.getData()};
+        }
+        callback.onReceiveValue(result);
+    }
+
+    // ------------------------------------------------------------ 生命周期
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_BACK && web != null && web.canGoBack()) {
+            web.goBack();
+            return true;
+        }
+        return super.onKeyDown(keyCode, event);
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        if (web != null) web.saveState(outState);
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (server != null) server.stop();
+        if (web != null) {
+            web.removeJavascriptInterface("CarCareAndroid");
+        }
+        super.onDestroy();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) setupEdgeToEdgeFlagsOnly();
+    }
+
+    private void setupEdgeToEdgeFlagsOnly() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            int flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+            }
+            getWindow().getDecorView().setSystemUiVisibility(flags);
+        }
+    }
+}

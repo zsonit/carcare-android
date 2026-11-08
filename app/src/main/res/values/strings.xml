@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">车管家</string>
+    <string name="viewer_share">分享</string>
+    <string name="viewer_close">关闭</string>
+    <string name="viewer_hint">轻点任意位置关闭</string>
+    <string name="dlg_ok">确定</string>
+    <string name="dlg_cancel">取消</string>
+    <string name="share_via">保存或分享</string>
+    <string name="export_failed">导出失败：%1$s</string>
+</resources>

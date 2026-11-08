@@ -1,0 +1,1590 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#eaf1fb">
+<meta name="description" content="汽车维修保养记录与智能提醒：双维度保养提醒、多车档案、维保凭证、养车成本统计。支持 NAS 与手机独立使用。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="车管家">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>车管家 · 汽车维修保养记录</title>
+<style>
+  /* ============================================================
+     车管家 · Liquid Glass (iOS 27) 视觉系统
+     仅改视觉层，不改任何业务逻辑与 DOM 结构
+     ============================================================ */
+  :root{
+    /* 文字 */
+    --ink:#0b1a2b; --sub:#5c6b7e; --ink-2:#22384f;
+    /* 品牌与语义色（取 iOS 系统色） */
+    --pri:#0a84ff; --pri-d:#0068d8; --pri-soft:rgba(10,132,255,.13);
+    --ok:#28a745; --ok-c:#1a7f37; --warn:#e08600; --warn-c:#9a6700; --bad:#e8382c; --bad-c:#c9271c;
+    --soft:rgba(255,255,255,.55);
+    /* 玻璃材质 */
+    --glass-hi:rgba(255,255,255,.78);
+    --glass-lo:rgba(255,255,255,.46);
+    --glass-stroke:rgba(255,255,255,.78);
+    --glass-inner:inset 0 1px 0 rgba(255,255,255,.95), inset 0 -1px 0 rgba(255,255,255,.35);
+    --glass-drop:0 12px 28px -12px rgba(16,44,80,.30), 0 3px 10px -4px rgba(16,44,80,.16);
+    --glass-drop-sm:0 6px 16px -8px rgba(16,44,80,.28), 0 2px 6px -3px rgba(16,44,80,.14);
+    --hairline:rgba(108,132,160,.18);
+    --blur:blur(26px) saturate(190%);
+    --blur-sm:blur(16px) saturate(180%);
+    --radius:26px; --radius-lg:30px; --radius-sm:18px; --radius-xs:14px;
+    /* 兼容旧变量名，模板里沿用的 --shadow/--card/--line */
+    --card:rgba(255,255,255,.6); --line:var(--hairline);
+    --shadow:var(--glass-drop);
+    /* 图表 */
+    --chart:#0a84ff; --chart-2:#5ac8fa;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;min-height:100%}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Helvetica Neue","Segoe UI","Microsoft YaHei",sans-serif;
+    background:#eaf1fb;color:var(--ink);font-size:14px;line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:calc(env(safe-area-inset-bottom) + 96px);
+    min-height:100vh;overflow-x:hidden;
+  }
+  /* 背景：iOS 桌面那种柔和的光斑墙纸，玻璃才有东西可折射 */
+  body::before{
+    content:'';position:fixed;inset:-15%;z-index:-2;
+    background:
+      radial-gradient(38% 26% at 14% 6%, rgba(120,175,255,.62), rgba(120,175,255,0) 68%),
+      radial-gradient(42% 30% at 88% 10%, rgba(176,148,255,.50), rgba(176,148,255,0) 70%),
+      radial-gradient(52% 34% at 18% 82%, rgba(96,220,214,.46), rgba(96,220,214,0) 72%),
+      radial-gradient(46% 30% at 92% 86%, rgba(255,186,140,.42), rgba(255,186,140,0) 70%),
+      radial-gradient(60% 40% at 50% 50%, rgba(255,255,255,.55), rgba(255,255,255,0) 75%),
+      linear-gradient(178deg,#eff5ff 0%,#e6eefb 48%,#e9f2fa 100%);
+    filter:saturate(118%);
+    pointer-events:none;
+  }
+  .hidden{display:none!important}
+  button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;font-size:inherit}
+  h1,h2,h3,h4{margin:0;letter-spacing:-.2px}
+
+  /* ---------- 表单控件：磨砂内凹输入框 ---------- */
+  input,select,textarea{
+    font-family:inherit;font-size:14px;width:100%;padding:11px 13px;
+    color:var(--ink);outline:none;
+    background:linear-gradient(180deg,rgba(255,255,255,.86),rgba(255,255,255,.66));
+    border:1px solid rgba(255,255,255,.9);
+    border-radius:var(--radius-xs);
+    box-shadow:inset 0 1px 2px rgba(16,44,80,.07), 0 1px 0 rgba(255,255,255,.7);
+    -webkit-appearance:none;appearance:none;
+    transition:box-shadow .18s ease,border-color .18s ease,background .18s ease;
+  }
+  input:focus,select:focus,textarea:focus{
+    border-color:rgba(10,132,255,.55);
+    box-shadow:inset 0 1px 2px rgba(16,44,80,.05), 0 0 0 4px rgba(10,132,255,.16);
+    background:#fff;
+  }
+  select{
+    padding-right:34px;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1.2 1.6 6 6.4 10.8 1.6' fill='none' stroke='%236c84a0' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/></svg>"),
+      linear-gradient(180deg,rgba(255,255,255,.86),rgba(255,255,255,.66));
+    background-repeat:no-repeat,no-repeat;
+    background-position:right 13px center,0 0;
+    background-size:12px 8px,100% 100%;
+  }
+  select:focus{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1.2 1.6 6 6.4 10.8 1.6' fill='none' stroke='%230a84ff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/></svg>"),
+      linear-gradient(180deg,#fff,#fff)}
+  input[readonly]{
+    color:var(--ink)!important;font-weight:750!important;
+    background:linear-gradient(180deg,rgba(238,243,250,.9),rgba(232,239,248,.8))!important;
+    box-shadow:inset 0 1px 3px rgba(16,44,80,.07)!important;border-color:rgba(255,255,255,.7)!important;
+  }
+  textarea{resize:vertical;min-height:64px;line-height:1.55}
+  label{display:block;font-size:12px;font-weight:600;color:var(--sub);margin:12px 0 5px;letter-spacing:.2px}
+  code{font-size:11.5px;background:rgba(10,132,255,.10);color:var(--pri-d);padding:1px 5px;border-radius:6px}
+
+  /* ---------- 按钮 ---------- */
+  .btn{
+    position:relative;display:inline-flex;align-items:center;justify-content:center;gap:6px;
+    padding:12px 16px;border-radius:var(--radius-sm);
+    font-weight:650;font-size:14.5px;letter-spacing:-.1px;text-align:center;
+    color:#fff;border:1px solid rgba(255,255,255,.34);
+    background:linear-gradient(180deg,#4aa5ff 0%,#0a84ff 55%,#0774e6 100%);
+    box-shadow:0 8px 18px -8px rgba(10,132,255,.75), inset 0 1px 0 rgba(255,255,255,.55), inset 0 -1px 0 rgba(0,0,0,.10);
+    transition:transform .12s ease,filter .12s ease,box-shadow .12s ease;
+  }
+  .btn:active{transform:scale(.972);filter:brightness(.95)}
+  .btn.ghost{
+    color:var(--pri-d);border:1px solid rgba(255,255,255,.92);
+    background:linear-gradient(180deg,rgba(255,255,255,.85),rgba(255,255,255,.58));
+    box-shadow:var(--glass-inner),var(--glass-drop-sm);
+    -webkit-backdrop-filter:var(--blur-sm);backdrop-filter:var(--blur-sm);
+  }
+  .btn.ghost:active{background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(255,255,255,.7))}
+  .btn.line{
+    color:var(--ink);border:1px solid rgba(255,255,255,.92);
+    background:linear-gradient(180deg,rgba(255,255,255,.72),rgba(255,255,255,.46));
+    box-shadow:var(--glass-inner),0 3px 10px -6px rgba(16,44,80,.3);
+  }
+  .btn.danger{
+    color:var(--bad-c);border:1px solid rgba(232,56,44,.22);
+    background:linear-gradient(180deg,rgba(255,255,255,.8),rgba(255,240,239,.6));
+    box-shadow:var(--glass-inner),0 3px 10px -6px rgba(200,40,30,.25);
+  }
+  .btn.del{margin-top:12px;color:#fff;border-color:rgba(255,255,255,.3);
+    background:linear-gradient(180deg,#ff6257,#e8382c);box-shadow:0 8px 18px -8px rgba(232,56,44,.7),inset 0 1px 0 rgba(255,255,255,.4)}
+  .row{display:flex;gap:10px}
+  .row>*{flex:1}
+
+  /* ---------- 顶栏：悬浮玻璃条 ---------- */
+  header{
+    position:sticky;top:0;z-index:20;
+    display:flex;align-items:center;gap:10px;
+    padding:calc(9px + env(safe-area-inset-top)) 14px 9px;
+    background:linear-gradient(180deg,rgba(255,255,255,.72),rgba(255,255,255,.44));
+    -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
+    border-bottom:1px solid rgba(255,255,255,.7);
+    box-shadow:0 1px 0 rgba(16,44,80,.05), 0 8px 20px -18px rgba(16,44,80,.5);
+  }
+  .logo{font-weight:800;font-size:17px;letter-spacing:-.3px;color:var(--ink);white-space:nowrap;display:flex;align-items:baseline;gap:5px}
+  .logo small{color:var(--sub);font-weight:600;font-size:10.5px;letter-spacing:.4px}
+  @media(max-width:420px){.logo small{display:none}.veh-sel select{font-size:12.5px;padding:8px 28px 8px 11px}}
+  .veh-sel{flex:1;min-width:0}
+  .veh-sel select{
+    padding:8px 30px 8px 12px;font-size:13px;font-weight:650;color:var(--ink-2);
+    border-radius:14px;border:1px solid rgba(255,255,255,.9);
+    background-color:transparent;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1.2 1.6 6 6.4 10.8 1.6' fill='none' stroke='%236c84a0' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/></svg>"),
+      linear-gradient(180deg,rgba(255,255,255,.82),rgba(255,255,255,.58));
+    background-repeat:no-repeat,no-repeat;
+    background-position:right 11px center,0 0;
+    background-size:11px 7px,100% 100%;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.95), 0 2px 6px -3px rgba(16,44,80,.28);
+    text-overflow:ellipsis;
+  }
+  .mode-badge{
+    flex:none;
+    font-size:10.5px;font-weight:700;padding:4px 9px;border-radius:999px;white-space:nowrap;
+    color:var(--pri-d);background:rgba(10,132,255,.13);border:1px solid rgba(255,255,255,.7);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.8);
+  }
+  .mode-badge.local{color:var(--ok-c);background:rgba(52,199,89,.15)}
+  .mode-badge.nas{color:var(--warn-c);background:rgba(255,159,10,.17)}
+
+  /* ---------- 主体 ---------- */
+  main{padding:14px;max-width:780px;margin:0 auto}
+  .screen{animation:screenIn .30s cubic-bezier(.22,.9,.28,1)}
+  @keyframes screenIn{from{opacity:0;transform:translate3d(0,10px,0) scale(.994)}to{opacity:1;transform:none}}
+  @media(prefers-reduced-motion:reduce){.screen{animation:none}}
+  .screen .muted,.muted{color:var(--sub);font-size:12.5px;line-height:1.55}
+
+  /* 玻璃卡片 */
+  .card{
+    position:relative;padding:16px;margin-bottom:14px;
+    border-radius:var(--radius);
+    border:1px solid var(--glass-stroke);
+    background:linear-gradient(165deg,rgba(255,255,255,.72) 0%,rgba(255,255,255,.50) 48%,rgba(255,255,255,.62) 100%);
+    -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
+    box-shadow:var(--glass-inner),var(--glass-drop);
+  }
+  .card h3{font-size:16px;font-weight:750;margin-bottom:6px;letter-spacing:-.35px}
+  .card .meta{color:var(--sub);font-size:12px;margin-top:2px}
+  .card .muted+.muted{margin-top:4px}
+
+  /* 汇总统计块 */
+  .summary-bar{display:flex;gap:10px;margin-bottom:14px}
+  .summary-bar .card{flex:1;margin-bottom:0;text-align:center;padding:14px 8px;border-radius:22px}
+  .stat{display:flex;flex-direction:column;align-items:center;gap:2px}
+  .stat b{font-size:26px;font-weight:800;line-height:1.05;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+  .stat span{font-size:11px;font-weight:650;color:var(--sub);letter-spacing:.3px}
+
+  .sec-title{font-size:13.5px;font-weight:750;color:var(--sub);margin:6px 2px 9px;letter-spacing:.1px}
+  .rem-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:4px 0 9px}
+  .rem-head .sec-title{margin:0}
+  .rem-add{padding:8px 14px;font-size:13px;flex:none;border-radius:999px}
+  .empty{
+    text-align:center;color:var(--sub);padding:38px 16px;font-size:13px;line-height:1.6;
+    border-radius:var(--radius);border:1px dashed rgba(120,145,175,.35);
+    background:rgba(255,255,255,.34);
+  }
+
+  /* ---------- 模板气泡 ---------- */
+  .tpl-box{
+    padding:12px 12px 6px;margin-bottom:14px;border-radius:22px;
+    border:1px solid var(--glass-stroke);
+    background:linear-gradient(165deg,rgba(255,255,255,.66),rgba(255,255,255,.44));
+    -webkit-backdrop-filter:var(--blur-sm);backdrop-filter:var(--blur-sm);
+    box-shadow:var(--glass-inner),var(--glass-drop-sm);
+  }
+  .tpl-tip{font-size:12px;color:var(--sub);margin-bottom:8px;font-weight:550}
+  .chips{display:flex;gap:8px;overflow-x:auto;padding:0 0 6px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .chips::-webkit-scrollbar{height:0;display:none}
+  .chip{
+    flex:none;white-space:nowrap;padding:8px 14px;font-size:13px;font-weight:650;
+    color:var(--pri-d);border-radius:999px;
+    border:1px solid rgba(255,255,255,.9);
+    background:linear-gradient(180deg,rgba(255,255,255,.9),rgba(255,255,255,.62));
+    box-shadow:inset 0 1px 0 #fff,0 3px 9px -5px rgba(16,44,80,.45);
+    transition:transform .1s ease,background .15s ease;
+  }
+  .chip:active{transform:scale(.955);background:rgba(10,132,255,.16)}
+  .chip-group{margin-bottom:10px}
+  .chip-group:last-child{margin-bottom:2px}
+  .chip-group-title{font-size:11.5px;font-weight:750;color:var(--sub);margin:0 0 7px 4px;display:flex;align-items:center;gap:6px}
+  .chip-group-title::before{content:'';width:4px;height:12px;border-radius:2px;background:linear-gradient(180deg,#5ac8fa,#0a84ff);display:inline-block}
+
+  /* 车型小标签 */
+  .rtag{
+    display:inline-block;max-width:9.5em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    font-size:12px;font-weight:700;line-height:1.5;letter-spacing:.2px;vertical-align:middle;
+    color:#0a5bbd;padding:2px 9px;margin-left:6px;border-radius:9px;
+    background:linear-gradient(180deg,rgba(219,232,253,.95),rgba(198,220,251,.9));
+    border:1px solid rgba(160,195,240,.85);
+  }
+  .muted-tag{color:#5a6572;background:linear-gradient(180deg,rgba(240,243,246,.95),rgba(228,233,238,.9));border-color:rgba(200,208,216,.9);font-weight:650}
+
+  /* ---------- 状态胶囊 ---------- */
+  .pill{
+    display:inline-flex;align-items:center;gap:4px;flex:none;
+    font-size:11px;font-weight:750;padding:4px 10px;border-radius:999px;letter-spacing:.2px;
+    border:1px solid rgba(255,255,255,.75);box-shadow:inset 0 1px 0 rgba(255,255,255,.7);
+  }
+  .pill.ok{background:rgba(52,199,89,.16);color:var(--ok-c)}
+  .pill.warn{background:rgba(255,159,10,.18);color:var(--warn-c)}
+  .pill.bad{background:rgba(255,59,48,.15);color:var(--bad-c)}
+  .pill.gray{background:rgba(120,140,165,.14);color:var(--sub)}
+  .pill.pri{background:rgba(10,132,255,.14);color:var(--pri-d)}
+
+  /* ---------- 进度条 ---------- */
+  .bar{height:9px;border-radius:999px;overflow:hidden;background:rgba(120,145,175,.20);box-shadow:inset 0 1px 2px rgba(16,44,80,.10)}
+  .bar>i{display:block;height:100%;border-radius:999px;transition:width .5s cubic-bezier(.22,.9,.28,1);
+    background:linear-gradient(90deg,#5ac8fa,#0a84ff);box-shadow:0 0 10px -2px rgba(10,132,255,.6)}
+  .bar>i.ok{background:linear-gradient(90deg,#6ee7a8,#28c76f)}
+  .bar>i.warn{background:linear-gradient(90deg,#ffd06b,#f0a020)}
+  .bar>i.bad{background:linear-gradient(90deg,#ff8a80,#e8382c)}
+
+  /* ---------- 维保服务 ---------- */
+  .cat-tabs{
+    display:flex;gap:6px;overflow-x:auto;padding:4px;margin:2px 0 12px;
+    border-radius:16px;border:1px solid rgba(255,255,255,.7);
+    background:rgba(255,255,255,.4);scrollbar-width:none;
+    box-shadow:inset 0 1px 2px rgba(16,44,80,.05);
+  }
+  .cat-tabs::-webkit-scrollbar{display:none}
+  .cat-tabs button{
+    flex:none;padding:8px 14px;border-radius:12px;font-size:12.5px;font-weight:650;color:var(--sub);
+    white-space:nowrap;transition:background .18s ease,color .18s ease,box-shadow .18s ease;
+  }
+  .cat-tabs button.on{
+    color:#fff;background:linear-gradient(180deg,#4aa5ff,#0a84ff);
+    box-shadow:0 6px 14px -8px rgba(10,132,255,.9),inset 0 1px 0 rgba(255,255,255,.5);
+  }
+  .cat-items-head{display:flex;align-items:center;justify-content:space-between;gap:10px;font-weight:650;font-size:13px;margin:2px 0 8px;color:var(--ink-2)}
+  .cat-items-head .cnt{
+    font-weight:700;font-size:11.5px;color:var(--pri-d);padding:3px 10px;border-radius:999px;white-space:nowrap;
+    background:rgba(10,132,255,.12);border:1px solid rgba(255,255,255,.75);
+  }
+  .item-chips{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 12px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .item-chips::-webkit-scrollbar{display:none}
+  .ichip{
+    flex:0 0 auto;white-space:nowrap;padding:10px 15px;font-size:13.5px;font-weight:650;
+    color:var(--pri-d);border-radius:999px;
+    border:1px solid rgba(255,255,255,.9);
+    background:linear-gradient(180deg,rgba(255,255,255,.9),rgba(255,255,255,.6));
+    box-shadow:inset 0 1px 0 #fff,0 4px 12px -7px rgba(16,44,80,.5);
+    transition:transform .1s ease,background .16s ease,color .16s ease;
+  }
+  .ichip:active{transform:scale(.95)}
+  .ichip.on{
+    color:#fff;border-color:rgba(255,255,255,.4);
+    background:linear-gradient(180deg,#4aa5ff,#0a84ff);
+    box-shadow:0 8px 18px -9px rgba(10,132,255,.9),inset 0 1px 0 rgba(255,255,255,.5);
+  }
+  .item-bill{margin:6px 0 2px}
+  .bill-row{
+    padding:11px 12px;margin-bottom:9px;border-radius:var(--radius-sm);
+    border:1px solid rgba(255,255,255,.85);
+    background:linear-gradient(180deg,rgba(255,255,255,.74),rgba(255,255,255,.5));
+    box-shadow:inset 0 1px 0 #fff,0 3px 10px -7px rgba(16,44,80,.45);
+  }
+  .bill-row .bn{font-weight:700;font-size:13.5px;margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .bill-row .bn .last{
+    font-weight:650;font-size:11px;color:var(--sub);padding:2px 8px;border-radius:999px;
+    background:rgba(120,145,175,.14);
+  }
+  .bill-row .bn .last.new{color:var(--warn-c);background:rgba(255,159,10,.16)}
+  .bill-row .row input{font-size:13.5px;padding:9px 11px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .plate-row{display:flex;gap:8px;align-items:center}
+  .plate-prov{flex:0 0 78px;font-size:16px;font-weight:750;text-align:center;padding-left:6px;padding-right:24px}
+  .plate-no{flex:1;text-transform:uppercase;letter-spacing:1.5px;font-weight:650}
+
+  /* ---------- 档案 ---------- */
+  .vcard{
+    position:relative;overflow:hidden;border-radius:var(--radius);margin-bottom:14px;
+    border:1px solid var(--glass-stroke);box-shadow:var(--glass-drop);
+    background:rgba(255,255,255,.5);
+    -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
+  }
+  .vcard-front{
+    position:relative;z-index:2;padding:16px;transition:transform .24s cubic-bezier(.22,.9,.28,1);will-change:transform;
+    background:linear-gradient(165deg,rgba(255,255,255,.80),rgba(255,255,255,.62));
+    -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
+  }
+  .vcard-del{
+    position:absolute;top:0;right:0;height:100%;width:88px;z-index:1;
+    display:flex;align-items:center;justify-content:center;font-weight:750;font-size:15px;color:#fff;
+    background:linear-gradient(180deg,#ff6257,#e8382c);
+    /* 默认隐藏，避免透过玻璃看到红色；左滑拖动时才显形 */
+    opacity:0;transition:opacity .16s ease;
+  }
+  .vcard.swiped .vcard-del,.vcard.dragging .vcard-del{opacity:1}
+  .vcard.swiped .vcard-front{transform:translateX(-88px)}
+  .v-edit{color:var(--pri-d);font-size:13px;font-weight:700;flex:none;padding:4px 10px;border-radius:999px;background:rgba(10,132,255,.1)}
+  .rec-item{display:flex;gap:12px;align-items:flex-start}
+  .rec-item .body{flex:1;min-width:0}
+  .rec-item .body .t{font-weight:750;font-size:14.5px;letter-spacing:-.2px}
+  .rec-item .body .s{color:var(--sub);font-size:12px;margin-top:3px;line-height:1.5}
+  .thumb{width:56px;height:56px;border-radius:14px;object-fit:cover;flex:none;border:1px solid rgba(255,255,255,.9);box-shadow:0 4px 12px -6px rgba(16,44,80,.5)}
+  .items .it{display:inline-block;margin-right:2px}
+  .items .it b{color:var(--ok-c);font-weight:750}
+
+  /* ---------- 键值行（iOS 分组列表感） ---------- */
+  .kv{
+    display:flex;justify-content:space-between;align-items:center;gap:10px;
+    padding:11px 0;font-size:13.5px;border-bottom:1px solid rgba(108,132,160,.16);
+  }
+  .kv>span{min-width:0;display:flex;align-items:center;flex-wrap:wrap;gap:2px}
+  .kv>b{flex:0 0 auto;white-space:nowrap;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.1px}
+  .kv span:first-child{color:var(--sub)}
+  .kv:last-child{border-bottom:none;padding-bottom:2px}
+  .note{font-size:11.5px;color:var(--sub);margin-top:9px;line-height:1.6}
+  .chk{
+    display:flex;align-items:center;gap:10px;padding:11px 13px;margin-bottom:8px;
+    border-radius:var(--radius-xs);border:1px solid rgba(255,255,255,.85);
+    background:rgba(255,255,255,.5);box-shadow:inset 0 1px 0 rgba(255,255,255,.85);
+  }
+  .chk input{width:auto;flex:none;box-shadow:none;accent-color:var(--pri)}
+  .chk span{flex:1}
+
+  /* ---------- 开关（iOS 27 尺寸） ---------- */
+  .switch{position:relative;width:51px;height:31px;flex:none}
+  .switch input{display:none}
+  .switch i{
+    position:absolute;inset:0;border-radius:999px;transition:background .25s ease,box-shadow .25s ease;
+    background:linear-gradient(180deg,rgba(140,158,180,.55),rgba(120,140,165,.45));
+    box-shadow:inset 0 1px 3px rgba(16,44,80,.18);
+  }
+  .switch i:before{
+    content:"";position:absolute;width:27px;height:27px;top:2px;left:2px;border-radius:50%;
+    background:linear-gradient(180deg,#fff,#f2f6fb);
+    box-shadow:0 2px 5px rgba(16,44,80,.28),inset 0 -1px 1px rgba(0,0,0,.05);
+    transition:transform .26s cubic-bezier(.3,1.3,.4,1);
+  }
+  .switch input:checked+i{background:linear-gradient(180deg,#4fd36b,#28b84c);box-shadow:inset 0 1px 2px rgba(0,0,0,.10)}
+  .switch input:checked+i:before{transform:translateX(20px)}
+
+  /* ---------- 浮起按钮 ---------- */
+  .fab{
+    position:fixed;right:16px;bottom:calc(96px + env(safe-area-inset-bottom));
+    width:58px;height:58px;border-radius:50%;z-index:30;
+    display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:300;color:#fff;
+    border:1px solid rgba(255,255,255,.4);
+    background:linear-gradient(180deg,#4aa5ff,#0a84ff 60%,#0774e6);
+    box-shadow:0 14px 28px -10px rgba(10,132,255,.85),inset 0 1px 0 rgba(255,255,255,.5);
+    transition:transform .14s ease;
+  }
+  .fab:active{transform:scale(.93)}
+
+  /* ---------- 底部导航：悬浮玻璃胶囊 ---------- */
+  nav{
+    position:fixed;left:10px;right:10px;z-index:40;
+    bottom:calc(8px + env(safe-area-inset-bottom));
+    display:flex;padding:6px;border-radius:28px;
+    border:1px solid rgba(255,255,255,.8);
+    background:linear-gradient(180deg,rgba(255,255,255,.74),rgba(255,255,255,.52));
+    -webkit-backdrop-filter:blur(30px) saturate(200%);backdrop-filter:blur(30px) saturate(200%);
+    box-shadow:0 18px 36px -14px rgba(16,44,80,.45),0 4px 12px -6px rgba(16,44,80,.25),inset 0 1px 0 rgba(255,255,255,.95);
+  }
+  nav button{
+    position:relative;z-index:2;flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+    padding:7px 2px 5px;border-radius:22px;color:var(--sub);font-size:10.5px;font-weight:650;letter-spacing:.1px;
+    -webkit-tap-highlight-color:transparent;
+    transition:color .32s cubic-bezier(.32,.72,0,1);
+  }
+  nav button .ic{
+    font-size:0;line-height:0;width:26px;height:26px;display:flex;align-items:center;justify-content:center;
+    transition:transform .34s cubic-bezier(.32,1.34,.36,1);
+  }
+  nav button .ic svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round}
+  nav button.on{color:var(--pri-d)}
+  nav button.on .ic{transform:translateY(-.5px) scale(1.04)}
+  nav button:active .ic{transform:scale(.88)}
+
+  /* 液态玻璃镜头：在按钮之间滑行，带拖尾与挤压回弹 */
+  #navLens,#navLensTrail{
+    position:absolute;left:0;top:0;z-index:1;pointer-events:none;border-radius:22px;
+    transition:transform .52s cubic-bezier(.3,1.42,.42,1),
+               width .52s cubic-bezier(.3,1.42,.42,1),
+               height .52s cubic-bezier(.3,1.42,.42,1);
+  }
+  #navLens .lens-fill{
+    position:absolute;inset:0;border-radius:inherit;transform-origin:50% 58%;
+    background:linear-gradient(180deg,rgba(255,255,255,.97),rgba(255,255,255,.6));
+    box-shadow:inset 0 1px 0 #fff,inset 0 -1px 0 rgba(255,255,255,.55),
+               0 5px 16px -7px rgba(16,44,80,.45),0 0 0 1px rgba(10,132,255,.16);
+    will-change:transform;
+  }
+  #navLens .lens-fill::after{
+    content:'';position:absolute;inset:0;border-radius:inherit;
+    background:radial-gradient(130% 86% at 50% -28%,rgba(255,255,255,.95),rgba(255,255,255,0) 62%);
+  }
+  #navLensTrail{
+    z-index:0;background:rgba(255,255,255,.55);
+    -webkit-filter:blur(7px);filter:blur(7px);opacity:.6;
+    transition:transform .72s cubic-bezier(.26,1.14,.4,1),
+               width .72s cubic-bezier(.26,1.14,.4,1),
+               height .72s cubic-bezier(.26,1.14,.4,1);
+  }
+  @media(prefers-reduced-motion:reduce){
+    #navLens,#navLensTrail{transition-duration:.01s!important}
+    nav button,nav button .ic{transition-duration:.01s}
+  }
+  nav button .dot{
+    position:absolute;top:5px;right:calc(50% - 15px);width:8px;height:8px;border-radius:50%;
+    background:linear-gradient(180deg,#ff6b61,#e8382c);border:1.5px solid rgba(255,255,255,.95);
+    box-shadow:0 1px 4px rgba(232,56,44,.6);
+  }
+
+  /* ---------- Toast ---------- */
+  .toast{
+    position:fixed;left:50%;bottom:calc(104px + env(safe-area-inset-bottom));transform:translate(-50%,8px);
+    padding:11px 18px;border-radius:999px;font-size:13px;font-weight:600;z-index:60;
+    color:#fff;text-align:center;max-width:86%;opacity:0;pointer-events:none;
+    background:rgba(22,32,46,.74);
+    -webkit-backdrop-filter:blur(18px) saturate(180%);backdrop-filter:blur(18px) saturate(180%);
+    border:1px solid rgba(255,255,255,.2);
+    box-shadow:0 12px 28px -12px rgba(0,0,0,.6);
+    transition:opacity .26s ease,transform .26s cubic-bezier(.22,.9,.28,1);
+  }
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+
+  /* ---------- 弹窗：玻璃 Sheet ---------- */
+  .modal{
+    position:fixed;inset:0;z-index:50;display:flex;align-items:flex-end;justify-content:center;
+    background:rgba(14,26,44,.24);
+    -webkit-backdrop-filter:blur(14px) saturate(150%);backdrop-filter:blur(14px) saturate(150%);
+    animation:fadeIn .2s ease;
+  }
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  .modal .sheet{
+    position:relative;width:100%;max-width:560px;max-height:90vh;overflow:auto;
+    padding:20px 18px calc(20px + env(safe-area-inset-bottom));
+    border-radius:32px 32px 0 0;
+    border:1px solid rgba(255,255,255,.85);border-bottom:none;
+    background:linear-gradient(180deg,rgba(255,255,255,.92),rgba(255,255,255,.80));
+    -webkit-backdrop-filter:blur(34px) saturate(190%);backdrop-filter:blur(34px) saturate(190%);
+    box-shadow:0 -14px 44px -16px rgba(16,44,80,.5),inset 0 1px 0 rgba(255,255,255,.95);
+    animation:up .30s cubic-bezier(.22,.9,.28,1);
+  }
+  .modal .sheet::before{
+    content:'';display:block;width:40px;height:5px;margin:-8px auto 12px;border-radius:99px;
+    background:rgba(90,110,135,.3);
+  }
+  @keyframes up{from{transform:translateY(100%)}to{transform:translateY(0)}}
+  .sheet h2{margin:0 0 14px;font-size:19px;font-weight:800;letter-spacing:-.4px}
+  .sheet .close{position:absolute}
+  .modal-head{position:absolute;top:14px;right:14px;margin:0;z-index:2}
+  .modal-head button{
+    font-size:22px;line-height:1;color:var(--ink-2);width:32px;height:32px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    background:rgba(120,145,175,.14);transition:background .16s ease;
+  }
+  .modal-head button:active{background:rgba(120,145,175,.26)}
+  .sheet .btn{width:100%}
+
+  /* ---------- 桌面端 ---------- */
+  @media(min-width:760px){
+    body{padding-bottom:24px}
+    .layout{display:flex;max-width:1080px;margin:0 auto;gap:8px;align-items:flex-start}
+    main{flex:1;padding-bottom:24px}
+    nav{
+      position:sticky;top:78px;left:0;right:0;bottom:auto;
+      flex-direction:column;width:186px;flex:none;gap:3px;
+      padding:10px;border-radius:26px;margin:14px 0 0 6px;
+      height:auto;max-height:calc(100vh - 100px);
+    }
+    nav button{flex:none;flex-direction:row;justify-content:flex-start;gap:11px;padding:11px 13px;border-radius:18px;font-size:13.5px;font-weight:700}
+    nav button .ic{width:22px;height:22px}
+    nav button .ic svg{width:21px;height:21px}
+    nav button .dot{position:static;margin-left:auto;transform:none}
+    .fab{bottom:28px;right:28px}
+    .modal{align-items:center;background:rgba(14,26,44,.28)}
+    .modal .sheet{border-radius:32px;border-bottom:1px solid rgba(255,255,255,.85);max-height:86vh}
+    .modal .sheet::before{display:none}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">车管家<small>维保记录</small></div>
+  <div class="veh-sel">
+    <select id="vehicleSelect"></select>
+  </div>
+  <span class="mode-badge" id="modeBadge">检测中…</span>
+</header>
+
+<div class="layout">
+  <main id="main">
+    <!-- 提醒中心 -->
+    <section class="screen" id="screen-reminders">
+      <div class="summary-bar">
+        <div class="card"><div class="stat"><b id="cntOverdue" style="color:var(--bad)">0</b><span>已逾期</span></div></div>
+        <div class="card"><div class="stat"><b id="cntSoon" style="color:var(--warn)">0</b><span>即将到期</span></div></div>
+        <div class="card"><div class="stat"><b id="cntOk" style="color:var(--ok)">0</b><span>正常</span></div></div>
+      </div>
+      <div class="rem-head">
+        <div class="sec-title">我的保养提醒</div>
+        <button class="btn ghost rem-add" type="button" onclick="quickAddReminder()">+ 添加提醒</button>
+      </div>
+      <div class="tpl-box">
+        <div class="tpl-tip">选模板，只填「上次日期 / 里程」即可：</div>
+        <div class="chips" id="ruleChips"></div>
+      </div>
+      <div id="reminderList"></div>
+    </section>
+
+    <!-- 维保服务 -->
+    <section class="screen hidden" id="screen-services">
+      <div class="card">
+        <h3>本次维保记录</h3>
+        <div class="muted">选择服务类别与项目，一键登记。登记后可自动更新对应提醒。</div>
+        <label>服务类别</label>
+        <div class="cat-tabs" id="catTabs"></div>
+        <div class="cat-items-head">
+          <span>具体项目（左右滑动浏览，点击选中）</span>
+          <span class="cnt" id="catItemsCnt">已选 0</span>
+        </div>
+        <div class="item-chips" id="catItems"></div>
+        <div class="row" style="margin:8px 0 4px">
+          <input id="customItem" placeholder="例如：四轮定位、加玻璃水…">
+          <button class="btn ghost" type="button" onclick="addCustomItem()">添加</button>
+        </div>
+        <div id="itemBill" class="item-bill"></div>
+      </div>
+      <div class="card">
+        <label>维保日期</label>
+        <input id="svcDate" type="date">
+        <label>当前里程 (km)</label>
+        <input id="svcMileage" type="number" inputmode="numeric" placeholder="与车辆当前里程一致">
+        <label>维保合计（按各项自动累加）</label>
+        <input id="svcCost" type="text" readonly value="¥0.00" style="background:#f4f6f9;font-weight:700">
+        <div class="muted" id="svcBreak" style="margin-top:4px"></div>
+        <label>门店 / 经办</label>
+        <input id="svcShop" placeholder="如：途虎养车 / 4S店">
+        <label>备注</label>
+        <textarea id="svcNote" placeholder="可选"></textarea>
+        <label>收据 / 发票凭证</label>
+        <input id="svcReceipt" type="file" accept="image/*">
+        <div id="receiptPrev" class="row" style="margin-top:8px"></div>
+        <button class="btn" style="margin-top:14px;width:100%" onclick="saveService()">保存维保记录</button>
+      </div>
+    </section>
+
+    <!-- 档案管理 -->
+    <section class="screen hidden" id="screen-archive">
+      <div class="sec-title">车辆档案（多车独立管理）</div>
+      <div class="muted" style="font-size:12px;margin:-2px 0 10px">提示：点卡片可编辑；手机上左滑卡片可删除。</div>
+      <div id="vehicleCards"></div>
+      <button class="btn ghost" style="width:100%;margin-bottom:14px" onclick="openVehicleModal()">+ 添加 / 编辑车辆</button>
+      <div class="sec-title">维保记录</div>
+      <div id="recordList"></div>
+    </section>
+
+    <!-- 成本统计 -->
+    <section class="screen hidden" id="screen-finance">
+      <div class="summary-bar">
+        <div class="card"><div class="stat"><b id="costTotal">¥0</b><span>累计养车</span></div></div>
+        <div class="card"><div class="stat"><b id="costMonth">¥0</b><span>本月</span></div></div>
+      </div>
+      <div class="card">
+        <div class="row" style="align-items:center;margin-bottom:6px">
+          <b style="flex:none">费用统计报表</b>
+          <select id="finRange" style="flex:1" onchange="renderFinance()">
+            <option value="month">按月</option>
+            <option value="year">按年</option>
+          </select>
+        </div>
+        <div id="finChart"></div>
+        <div id="finBreak" style="margin-top:8px"></div>
+        <button class="btn line" style="width:100%;margin-top:10px" onclick="openCostModal()">+ 记一笔（油费/保养/其他）</button>
+      </div>
+    </section>
+
+    <!-- 设置 -->
+    <section class="screen hidden" id="screen-settings">
+      <div class="card">
+        <h3>基础设置</h3>
+        <div class="kv"><span>数据存储位置</span><b id="setMode">—</b></div>
+        <div class="kv"><span>当前车辆数</span><b id="setVeh">0</b></div>
+        <div class="kv" style="align-items:center"><span>消息推送通知</span>
+          <label class="switch"><input type="checkbox" id="pushToggle" onchange="togglePush()"><i></i></label></div>
+        <div class="note">开启后，应用打开时会检查提醒并通过系统通知推送到期/逾期事项。</div>
+      </div>
+      <div class="card" id="nasCard">
+        <div class="row" style="align-items:center;margin-bottom:2px">
+          <b style="flex:1;font-size:15px">数据存储与 NAS 同步</b>
+          <label class="switch"><input type="checkbox" id="nasToggle" onchange="toggleNas()"><i></i></label>
+        </div>
+        <div class="muted" style="margin:2px 0 8px" id="nasModeLine">当前仅存本机，不连任何服务器</div>
+        <div id="nasFields" class="hidden">
+          <label>NAS 服务器地址</label>
+          <input id="nasBase" inputmode="url" autocapitalize="off" autocomplete="off" spellcheck="false" onchange="saveNasForm()" placeholder="http://192.168.1.100:8765">
+          <label>访问密钥（服务端设了才需要填）</label>
+          <input id="nasKey" type="password" autocomplete="off" autocapitalize="off" onchange="saveNasForm()" placeholder="可留空">
+          <div class="row" style="margin-top:10px">
+            <button class="btn" onclick="syncNow()">立即同步</button>
+            <button class="btn ghost" onclick="testNas()">测试连接</button>
+          </div>
+          <div class="note" id="nasState">状态：未开启</div>
+          <div class="note">开启后，每次改动会先存本机、再自动备份一份到 NAS，可多设备共用；首次连接自动采用较新的一份。NAS 上需先运行配套同步服务，见仓库 <code>nas-server/</code>。</div>
+        </div>
+      </div>
+      <div class="card" id="installCard">
+        <h3>安装到手机（独立 App）</h3>
+        <div class="muted">添加到主屏后，本应用以全屏独立 App 运行：桌面有图标、可离线使用、数据存手机，无需每次开浏览器。</div>
+        <button class="btn" id="installBtn" style="width:100%;margin-top:8px" onclick="installApp()">安装到手机主屏</button>
+        <div class="note" id="installHint"></div>
+      </div>
+      <div class="card">
+        <h3>保养规则（按车型自定义周期）</h3>
+        <div class="muted">为常用项目预设默认周期，添加提醒时可一键套用。</div>
+        <div id="ruleList" style="margin-top:8px"></div>
+        <button class="btn line" style="width:100%;margin-top:8px" onclick="openRuleModal()">+ 新增保养规则</button>
+      </div>
+      <div class="card">
+        <div class="row">
+          <button class="btn line" onclick="exportData('csv')">导出 CSV</button>
+          <button class="btn line" onclick="exportData('pdf')">导出 PDF</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn ghost" onclick="importData()">导入备份</button>
+          <button class="btn ghost" onclick="loadDemo()">填充示例数据</button>
+        </div>
+        <button class="btn danger" style="width:100%;margin-top:10px" onclick="resetAll()">清空全部数据</button>
+        <div class="note">仅本机存储时数据在手机里，换机/卸载前请先导出 CSV 存档；清空操作不可恢复。</div>
+      </div>
+    </section>
+  </main>
+
+  <nav id="nav">
+    <div id="navLensTrail" aria-hidden="true"></div>
+    <div id="navLens" aria-hidden="true"><i class="lens-fill"></i></div>    <button class="on" data-screen="reminders" onclick="showScreen('reminders')"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8.6c0-3.3-2.7-6-6-6s-6 2.7-6 6c0 6.2-2.4 7.9-2.4 7.9h16.8S18 14.8 18 8.6"/><path d="M13.7 20.2a2 2 0 0 1-3.4 0"/></svg></span>提醒中心<span class="dot hidden" id="navDot"></span></button>
+    <button data-screen="services" onclick="showScreen('services')"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.6 6.3a1 1 0 0 0 0 1.4l1.7 1.7a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-8 8L6.7 20.4a2.1 2.1 0 0 1-3-3l6.8-6.8a6 6 0 0 1 8-8z"/></svg></span>维保服务</button>
+    <button data-screen="archive" onclick="showScreen('archive')"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2h4.2l2 2.6H19a2 2 0 0 1 2 2z"/></svg></span>档案管理</button>
+    <button data-screen="finance" onclick="showScreen('finance')"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V12"/><path d="M12 20V5"/><path d="M19 20v-5"/></svg></span>成本统计</button>
+    <button data-screen="settings" onclick="showScreen('settings')"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.1"/><path d="M19.3 14.6a1.6 1.6 0 0 0 .3 1.8l.1.1a1.9 1.9 0 1 1-2.7 2.7l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5v.2a1.9 1.9 0 1 1-3.8 0v-.1a1.6 1.6 0 0 0-1.1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a1.9 1.9 0 1 1-2.7-2.7l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H4a1.9 1.9 0 1 1 0-3.8h.1a1.6 1.6 0 0 0 1.5-1.1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a1.9 1.9 0 1 1 2.7-2.7l.1.1a1.6 1.6 0 0 0 1.8.3H10a1.6 1.6 0 0 0 1-1.5V4a1.9 1.9 0 1 1 3.8 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a1.9 1.9 0 1 1 2.7 2.7l-.1.1a1.6 1.6 0 0 0-.3 1.8V10a1.6 1.6 0 0 0 1.5 1h.2a1.9 1.9 0 1 1 0 3.8h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></span>设置</button>
+  </nav>
+</div>
+
+<div class="fab hidden" id="fab" onclick="quickAddReminder()">+</div>
+<div class="toast" id="toast"></div>
+<div id="modalRoot"></div>
+
+<script>
+/* ============ 数据层 ============ */
+const KEY='carCareDB_v1';
+/* 车辆动力类型：fuel=燃油 / hev=油电混动 / phev=插电混动 / ev=纯电 */
+const POWER_LABEL={fuel:'燃油',hev:'油电混动',phev:'插电混动',ev:'纯电'};
+const normPower=p=>POWER_LABEL[p]?p:'fuel';
+/* 维保项目目录：燃油项（含发动机油液）、电车项（三电系统）、通用项，按动力类型组装 */
+const CATALOG_FUEL={
+  '常规保养':['更换机油','机油滤清器','空气滤清器','空调滤清器','燃油滤清器','火花塞','防冻液/冷却液更换','助力转向油更换','正时皮带更换','附件皮带更换','节气门清洗','喷油嘴清洗','进气道清洗','三元催化清洗','玻璃水加注','电瓶检测/保养'],
+  '深度保养':['发动机内部清洗','润滑系统深度养护','变速箱油循环机更换','刹车油循环机更换','冷却系统深度清洗','燃油系统深度清洗','燃烧室积碳清洗','进排气系统清洗','三元催化器深度清洗','空调蒸发箱清洗','发动机舱深度清洁养护']
+};
+const CATALOG_EV={
+  '三电检测':['动力电池健康检测(SOH)','电池电芯压差检测','驱动电机检测','电机控制器/电控检测','BMS电池管理系统检测','高压线束/接插件检测','高压系统绝缘检测','充电口/充电系统检测','车载充电机(OBC)检测','热管理(电池/电机)系统检测','OTA/车机软件升级'],
+  '电车保养':['空调滤清器更换','刹车油更换','减速器油更换','电池/电机冷却液更换','12V蓄电池检测/更换','玻璃水加注','空调系统清洗杀菌']
+};
+const CATALOG_COMMON={
+  '易损件更换':['轮胎换位','轮胎更换','刹车片更换','刹车盘更换','电瓶更换','雨刮片更换','灯泡更换','保险丝更换','减震器更换','球头/稳定杆拉杆更换','底盘衬套更换'],
+  '美容清洁':['全车打蜡','贴膜镀晶','室内杀菌','内饰清洁','漆面抛光','漆面封釉','真皮座椅护理','发动机舱清洗','大灯翻新','玻璃镀膜','轮毂清洗镀膜','全车精洗','臭氧消毒','空调管路清洗杀菌','底盘装甲喷涂','车身改色贴膜']
+};
+function catalogFor(power){
+  power=normPower(power);
+  const out={};
+  if(power==='ev'){Object.assign(out,CATALOG_EV);}                       // 纯电：仅三电 + 通用
+  else{Object.assign(out,CATALOG_FUEL);                                  // 燃油：发动机项 + 通用
+    if(power==='hev'||power==='phev')Object.assign(out,CATALOG_EV);}     // 混动：燃油 + 三电 + 通用
+  Object.assign(out,CATALOG_COMMON);
+  return out;
+}
+const CATALOG=catalogFor('fuel'); // 兼容默认引用
+let DB={vehicles:[],records:[],reminders:[],costs:[],rules:[],priceBook:{},settings:{push:false}};
+let MODE='local'; // 'nas' | 'local'
+let CUR=''; // current vehicle id
+let receiptB64='';
+
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+// 常用保养规则模板（提醒中心「模板气泡」的数据源；按动力类型分组，用户只填上次日期/里程）
+const RULES_FUEL=[
+  {name:'机油+机滤',months:6,km:5000},
+  {name:'空气滤清器',months:12,km:10000},
+  {name:'火花塞',months:30,km:40000},
+  {name:'防冻液/冷却液',months:24,km:40000},
+  {name:'变速箱油',months:48,km:60000}
+];
+const RULES_EV=[
+  {name:'三电系统检测',months:12,km:0},
+  {name:'减速器油',months:48,km:60000},
+  {name:'电池/电机冷却液',months:48,km:60000},
+  {name:'12V蓄电池',months:36,km:0}
+];
+const RULES_COMMON=[
+  {name:'空调滤清器',months:12,km:10000},
+  {name:'刹车油',months:24,km:40000},
+  {name:'轮胎换位',months:0,km:10000},
+  {name:'刹车片',months:0,km:40000},
+  {name:'电瓶',months:36,km:60000},
+  {name:'雨刮片',months:12,km:0},
+  {name:'保险续费',months:12,km:0},
+  {name:'年检',months:12,km:0}
+];
+function rulesFor(power){
+  power=normPower(power);
+  const arr=power==='ev'?RULES_EV.concat(RULES_COMMON)
+    :(power==='hev'||power==='phev')?RULES_FUEL.concat(RULES_EV,RULES_COMMON)
+    :RULES_FUEL.concat(RULES_COMMON);
+  const seen={};return arr.filter(x=>seen[x.name]?false:(seen[x.name]=1));  // 去重（如空调滤清器）
+}
+const DEFAULT_RULES=rulesFor('fuel'); // 兼容默认引用
+function ensureDefaultRules(){
+  DB.rules=DB.rules||[];
+  const primary=DB.vehicles[0]?DB.vehicles[0].name:'';
+  DB.rules.forEach(r=>{if(r.model===undefined)r.model=primary;}); // 先给老规则补齐车型归属
+  // 再按每辆车的动力类型补齐对应模板（燃油/混动/纯电各一套）
+  DB.vehicles.forEach(v=>{
+    rulesFor(v.power).forEach(d=>{
+      const r=DB.rules.find(x=>x.name===d.name&&((x.model||'')===v.name));
+      if(!r)DB.rules.push({id:uid(),name:d.name,months:d.months,km:d.km,model:v.name});
+    });
+  });
+}
+function today(){return new Date().toISOString().slice(0,10)}
+function fmt(n){return (n||0).toLocaleString('zh-CN',{maximumFractionDigits:2})}
+function money(n){return '¥'+fmt(n)}
+function esc(s){s=s==null?'':s;return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+
+async function detectMode(){ MODE=(nasCfg().on&&nasCfg().base)?'nas':'local'; }
+async function load(){
+  // 1) 本机数据先装载（保证离线秒开、NAS 挂了也能用）
+  try{const raw=localStorage.getItem(KEY); if(raw){const d=JSON.parse(raw); if(d&&d.vehicles) DB=Object.assign(DB,d);}}catch(e){}
+  DB._ts=DB._ts||0; DB.priceBook=DB.priceBook||{};
+  // 2) 开启了 NAS：首次拉取做「取新」合并（服务器较新→用之；本机较新→稍后自动推回）
+  if(MODE==='nas'){
+    try{
+      const srv=await nasFetch('/api/data',{method:'GET'},5000);
+      if(srv&&srv.vehicles){
+        srv._ts=srv._ts||0;
+        if(!DB.vehicles.length||srv._ts>DB._ts){
+          DB=Object.assign({},DB,srv); DB._ts=srv._ts;
+          try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}
+        }
+      }
+    }catch(e){/* NAS 暂不可达：本机数据顶上，save() 会自动重试推送 */}
+  }
+  if(!DB.vehicles.length){
+    DB.vehicles.push({id:uid(),name:'我的爱车',model:'',plate:'',vin:'',buyDate:'',mileage:0,insuranceDue:'',inspectionDue:'',power:'fuel'});
+    DB.rules=[
+      {id:uid(),name:'机油+机滤',months:6,km:5000},
+      {id:uid(),name:'空调滤清器',months:12,km:10000},
+      {id:uid(),name:'刹车油',months:24,km:40000},
+      {id:uid(),name:'火花塞',months:30,km:40000},
+      {id:uid(),name:'保险续费',months:12,km:0},
+      {id:uid(),name:'年检',months:12,km:0}
+    ];
+  }
+  DB.vehicles.forEach(v=>{if(!v.power)v.power='fuel';}); // 老数据补齐动力类型（默认燃油）
+  ensureDefaultRules(); // 补齐常用模板并按车型归属（老用户也能自动获得）
+  await save();          // 本机落盘；NAS 已开启时 save 内部会节流推送
+  CUR=DB.vehicles[0].id;
+}
+async function save(){
+  DB._ts=Date.now();
+  try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){toast('本机存储失败，可能空间不足');}
+  if(MODE==='nas') schedulePush(); // 数据总是先落本机，NAS 推送异步不阻塞
+}
+
+/* ============ NAS 同步（数据存本机 + 自动备份到 NAS 服务器） ============ */
+const NAS_KEY='carCareNAS_v1';
+const NAS_DEF={on:false,base:'',key:'',lastSync:0,lastErr:'',lastOk:false};
+function nasCfg(){try{const c=JSON.parse(localStorage.getItem(NAS_KEY));return Object.assign({},NAS_DEF,c||{});}catch(e){return Object.assign({},NAS_DEF);}}
+function saveNasCfg(c){try{localStorage.setItem(NAS_KEY,JSON.stringify(c));}catch(e){}}
+function nasBaseUrl(){return (nasCfg().base||'').replace(/\/+$/,'')}
+function nasKeyHdr(){const k=nasCfg().key;return k?{'X-Sync-Key':k}:{};}
+async function nasFetch(path,opt,ms){
+  const base=nasBaseUrl(); if(!base)throw new Error('未填服务器地址');
+  const ac=new AbortController(); const t=setTimeout(()=>ac.abort(),ms||6000);
+  try{
+    const r=await fetch(base+path,Object.assign({},opt||{},
+      {headers:Object.assign({},nasKeyHdr(),(opt&&opt.headers)||{}),signal:ac.signal}));
+    if(r.status===401)throw new Error('访问密钥错误');
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    return r.status===204?null:await r.json();
+  }finally{clearTimeout(t);}
+}
+let _pushTimer=null,_pushQ=Promise.resolve();
+function schedulePush(){ // 连续改动合并为一次推送（1.5s 防抖），串行防乱序
+  clearTimeout(_pushTimer);
+  _pushTimer=setTimeout(()=>{_pushTimer=null;_pushQ=_pushQ.then(()=>pushNas()).catch(()=>{});},1500);
+}
+async function pushNas(){
+  if(MODE!=='nas')return false;
+  try{
+    await nasFetch('/api/data',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(DB)},6000);
+    const c=nasCfg();c.lastSync=Date.now();c.lastErr='';c.lastOk=true;saveNasCfg(c);updateNasUI();return true;
+  }catch(e){
+    const c=nasCfg();c.lastErr=e.name==='AbortError'?'连接超时':'连接失败';c.lastOk=false;saveNasCfg(c);updateNasUI();return false;
+  }
+}
+async function pullNas(loud){
+  if(MODE!=='nas')return;
+  try{
+    const srv=await nasFetch('/api/data',{method:'GET'},6000);
+    if(!srv||!srv.vehicles)return;
+    srv._ts=srv._ts||0;
+    if(!DB.vehicles.length||srv._ts>DB._ts){
+      DB=Object.assign({},DB,srv); DB._ts=srv._ts;
+      try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}
+      renderAll();
+      if(loud)toast('已从 NAS 取回最新数据');
+    }
+  }catch(e){ if(loud)toast('拉取失败：'+(e.message||e)); }
+}
+function saveNasForm(){
+  const c=nasCfg();
+  const nb=document.getElementById('nasBase'),nk=document.getElementById('nasKey');
+  if(nb)c.base=(nb.value||'').trim().replace(/\/+$/,'');
+  if(nk)c.key=(nk.value||'').trim();
+  saveNasCfg(c);
+  MODE=(c.on&&c.base)?'nas':'local';
+  return c;
+}
+function toggleNas(){
+  const nt=document.getElementById('nasToggle');
+  const c=saveNasForm(); c.on=nt?nt.checked:false; saveNasCfg(c);
+  MODE=(c.on&&c.base)?'nas':'local';
+  const nf=document.getElementById('nasFields'); if(nf)nf.classList.toggle('hidden',!c.on);
+  setModeBadge(); updateNasUI();
+  if(!c.on){toast('已切回仅本机存储');return;}
+  if(!c.base){toast('请填写 NAS 服务器地址');return;}
+  toast('NAS 同步已开启'); save(); setTimeout(()=>syncNow(),300);
+}
+async function syncNow(){
+  if(!(nasCfg().on&&nasCfg().base)){toast('请先开启 NAS 同步并填写地址');return;}
+  toast('正在同步…');
+  await pullNas(true);
+  await pushNas();
+  toast('同步完成');
+}
+async function testNas(){
+  const c=saveNasForm();
+  if(!c.base){toast('请先填写 NAS 服务器地址');return;}
+  const st=document.getElementById('nasState'); if(st)st.textContent='测试中…';
+  try{
+    await nasFetch('/api/ping',{method:'GET'},4000);
+    if(st)st.textContent='✅ NAS 服务在线，可以同步'; toast('连接正常');
+  }catch(e){ if(st)st.textContent='❌ '+e.message; toast('连接失败：'+e.message); }
+}
+function setModeBadge(){
+  const b=document.getElementById('modeBadge'); if(!b)return;
+  if(MODE==='nas'){b.textContent='数据·NAS';b.classList.add('nas');b.classList.remove('local');}
+  else{b.textContent='数据·本机';b.classList.add('local');b.classList.remove('nas');}
+}
+function updateNasUI(){
+  const c=nasCfg();
+  const sm=document.getElementById('setMode');
+  if(sm)sm.textContent=(MODE==='nas')?(c.lastOk?'NAS 同步（已连接）':'NAS 同步（连接异常）'):'本机独立存储';
+  const ml=document.getElementById('nasModeLine');
+  if(ml)ml.textContent=(MODE==='nas')?('NAS：'+(c.base||'待填地址')):'当前仅存本机，不连任何服务器';
+  const st=document.getElementById('nasState');
+  if(st){
+    if(!c.on)st.textContent='状态：未开启';
+    else if(c.lastErr)st.textContent='⚠️ 上次同步失败（'+c.lastErr+'）';
+    else if(c.lastSync)st.textContent='✅ 上次同步 '+fmtTime(c.lastSync);
+    else st.textContent='状态：已开启，等待首次同步';
+  }
+}
+function fmtTime(ts){const d=new Date(ts);return (d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+
+/* ============ 工具 ============ */
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2200)}
+function curVehicle(){return DB.vehicles.find(v=>v.id===CUR)||DB.vehicles[0]||{id:null,name:'',mileage:0}}
+function vehName(id){const v=DB.vehicles.find(x=>x.id===id);return v?(v.name+(v.plate?'（'+v.plate+'）':'')):'—'}
+function addMonths(dateStr,m){if(!dateStr)return '';const d=new Date(dateStr);d.setMonth(d.getMonth()+m);return d.toISOString().slice(0,10)}
+
+/* ============ 提醒计算 ============ */
+function evalReminder(r){
+  const v=DB.vehicles.find(x=>x.id===r.vehicleId);
+  const now=new Date(); now.setHours(0,0,0,0);
+  let status='ok',dateNext='',mileNext='',progress=0,detail=[];
+  // date basis
+  if(r.basis==='date'||r.basis==='both'){
+    dateNext=addMonths(r.lastDate,r.months);
+    if(dateNext){
+      const dn=new Date(dateNext);dn.setHours(0,0,0,0);
+      const diff=Math.round((dn-now)/86400000);
+      detail.push('日期：'+dateNext+'（'+ (diff>=0?diff+'天后':'逾期'+(-diff)+'天') +'）');
+      if(diff<0){status='bad';}
+      else if(diff<=14 && status!=='bad'){status='warn';}
+      if(r.lastDate&&dateNext){const total=(new Date(dateNext)-new Date(r.lastDate))/86400000;const passed=(now-new Date(r.lastDate))/86400000;progress=Math.min(100,Math.round(passed/total*100));}
+    }
+  }
+  // mileage basis
+  if(r.basis==='mileage'||r.basis==='both'){
+    mileNext=(parseFloat(r.lastMileage||0)+parseFloat(r.km||0));
+    if(v&&r.km>0){
+      const diff=Math.round(mileNext-(parseFloat(v.mileage||0)));
+      detail.push('里程：'+fmt(mileNext)+' km（'+(diff>=0?('还剩'+fmt(diff)+' km'):('超'+fmt(-diff)+' km'))+'）');
+      if(diff<0) status='bad';
+      else if(diff<=500 && status!=='bad') status='warn';
+      if(r.lastMileage&&mileNext){const total=mileNext-r.lastMileage;const passed=(parseFloat(v.mileage||0))-r.lastMileage;progress=Math.max(progress,Math.min(100,Math.round(passed/total*100)));}
+    }
+  }
+  return {status,dateNext,mileNext,progress:Math.max(0,Math.min(100,progress)),detail};
+}
+
+/* ============ 渲染：提醒中心 ============ */
+function renderReminders(){
+  const list=document.getElementById('reminderList');
+  // 模板气泡：点一下即按该规则预填，用户只填上次日期/里程
+  const chips=document.getElementById('ruleChips');
+  if(chips){
+    // 按车型分组：当前车辆在前面，其次其他车辆，最后「通用」
+    const groups={};
+    DB.rules.forEach(r=>{const g=r.model||'通用';(groups[g]=groups[g]||[]).push(r);});
+    const order=[];
+    const cv=DB.vehicles.find(v=>v.id===CUR);
+    if(cv&&cv.name&&groups[cv.name])order.push(cv.name);
+    DB.vehicles.forEach(v=>{if(v.name&&groups[v.name]&&v.name!==cv.name)order.push(v.name);});
+    if(groups['通用'])order.push('通用');
+    chips.innerHTML=order.map(g=>`<div class="chip-group"><div class="chip-group-title">${esc(g)}</div><div class="chips">${groups[g].map(r=>`<button class="chip" type="button" onclick="addReminderFromRule('${r.id}')">+ ${esc(r.name)}</button>`).join('')}</div></div>`).join('')
+      + `<div class="chip-group"><div class="chip-group-title">自定义</div><div class="chips"><button class="chip" type="button" style="border-style:dashed;color:var(--sub);background:#f4f6f8" onclick="quickAddReminder()">+ 手动填写</button></div></div>`;
+  }
+  const rs=DB.reminders.filter(r=>r.vehicleId===CUR);
+  let o=0,s=0,k=0;
+  if(!rs.length){list.innerHTML='<div class="empty">暂无提醒。点上方模板气泡（如「+ 机油+机滤」），只填上次日期和里程即可生成提醒。</div>';}
+  else{
+    list.innerHTML=rs.map(r=>{
+      const e=evalReminder(r);
+      if(e.status==='bad')o++;else if(e.status==='warn')s++;else k++;
+      const st={bad:['bad','已逾期'],warn:['warn','即将到期'],ok:['ok','正常']}[e.status];
+      const barCls=e.status==='bad'?'bad':e.status==='warn'?'warn':'ok';
+      return `<div class="card">
+        <div class="row" style="align-items:center">
+          <h3 style="flex:1;margin:0">${esc(r.name)}</h3>
+          <span class="pill ${st[0]}">${st[1]}</span>
+        </div>
+        <div class="bar" style="margin:9px 0"><i class="${barCls}" style="width:${e.progress}%"></i></div>
+        <div class="meta">${e.detail.join('　·　')||'未设置周期'}</div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn ghost" onclick="editReminder('${r.id}')">编辑</button>
+          <button class="btn line" onclick="doneReminder('${r.id}')">已保养</button>
+          <button class="btn danger" onclick="delReminder('${r.id}')">删除</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('cntOverdue').textContent=DB.reminders.filter(r=>r.vehicleId===CUR&&evalReminder(r).status==='bad').length;
+  document.getElementById('cntSoon').textContent=DB.reminders.filter(r=>r.vehicleId===CUR&&evalReminder(r).status==='warn').length;
+  document.getElementById('cntOk').textContent=DB.reminders.filter(r=>r.vehicleId===CUR&&evalReminder(r).status==='ok').length;
+  const dot=document.getElementById('navDot');
+  if(DB.reminders.some(r=>r.vehicleId===CUR&&evalReminder(r).status!=='ok'))dot.classList.remove('hidden');else dot.classList.add('hidden');
+}
+function doneReminder(id){
+  const r=DB.reminders.find(x=>x.id===id);if(!r)return;
+  r.lastDate=today();r.lastMileage=curVehicle().mileage||r.lastMileage;
+  save();renderReminders();toast('已更新：「'+r.name+'」周期顺延');
+  pushNotify('保养已完成',r.name+' 的周期已自动顺延');
+}
+function delReminder(id){if(!confirm('确认删除该提醒？'))return;DB.reminders=DB.reminders.filter(x=>x.id!==id);save();renderReminders();toast('已删除')}
+
+/* ============ 渲染：维保服务 ============ */
+let curCat='常规保养';
+let curBill={};      // 本次登记：{ 项目名:{labor,parts} }
+let customNames=[];  // 手动补充项目名（当前类别下）
+function renderCatTabs(){
+  const cat=catalogFor(curVehicle().power);      // 按当前车辆动力类型取目录
+  const keys=Object.keys(cat);
+  if(keys.indexOf(curCat)<0)curCat=keys[0];     // 切换动力类型后修正当前分类
+  document.getElementById('catTabs').innerHTML=keys.map(c=>`<button class="${c===curCat?'on':''}" onclick="pickCat('${c}')">${c}</button>`).join('');
+  renderCatItems();
+}
+function pickCat(c){curCat=c;curBill={};customNames=[];renderCatTabs();renderItemBill();}
+function renderCatItems(){
+  const cat=catalogFor(curVehicle().power);
+  const box=document.getElementById('catItems');
+  box.innerHTML=(cat[curCat]||[]).map(it=>`<button type="button" class="ichip" data-item="${esc(it)}" onclick="toggleItem(this)">${esc(it)}</button>`).join('');
+  box.scrollLeft=0;
+  updateItemCount();
+}
+function toggleItem(el){el.classList.toggle('on');updateItemCount();renderItemBill();}
+function updateItemCount(){const n=[...document.querySelectorAll('#catItems .ichip.on')].length;const el=document.getElementById('catItemsCnt');if(el)el.textContent='已选 '+n;}
+function selectedNames(){
+  const chips=[...document.querySelectorAll('#catItems .ichip.on')].map(i=>i.dataset.item);
+  return chips.concat(customNames.filter(n=>!chips.includes(n)));
+}
+function addCustomItem(){
+  const v=document.getElementById('customItem').value.trim();
+  if(!v){return;}
+  if(!customNames.includes(v)&&![...document.querySelectorAll('#catItems .ichip.on')].some(i=>i.dataset.item===v))customNames.push(v);
+  document.getElementById('customItem').value='';
+  renderItemBill();
+}
+function renderItemBill(){
+  const names=selectedNames();
+  const box=document.getElementById('itemBill');
+  if(!names.length){box.innerHTML='<div class="muted" style="margin:6px 0">选中项目后，可逐项填写工时费与配件费（自动记住上次价格）。</div>';updateSvcTotal();return;}
+  box.innerHTML=names.map(n=>{
+    const b=curBill[n]||{labor:0,parts:0};
+    const pb=DB.priceBook[n];
+    const last=pb?`<span class="last">上次 ${money(pb.labor+pb.parts)} · ${esc(pb.shop||'—')}</span>`:'<span class="last new">新项目</span>';
+    return `<div class="bill-row"><div class="bn">${esc(n)} ${last}</div>
+      <div class="grid2">
+        <div><label>工时费</label><input id="bl_${esc(n)}" data-n="${esc(n)}" type="number" inputmode="decimal" value="${b.labor||''}" placeholder="0" oninput="onBillInput(this)"></div>
+        <div><label>配件费</label><input id="bp_${esc(n)}" data-n="${esc(n)}" type="number" inputmode="decimal" value="${b.parts||''}" placeholder="0" oninput="onBillInput(this)"></div>
+      </div></div>`;
+  }).join('');
+  updateSvcTotal();
+}
+function onBillInput(inp){
+  const n=inp.dataset.n;const isLabor=inp.id.indexOf('bl_')===0;
+  curBill[n]=curBill[n]||{labor:0,parts:0};
+  curBill[n][isLabor?'labor':'parts']=parseFloat(inp.value)||0;
+  updateSvcTotal();
+}
+function updateSvcTotal(){
+  let l=0,p=0;Object.values(curBill).forEach(b=>{l+=(+b.labor||0);p+=(+b.parts||0);});
+  const cost=l+p;
+  document.getElementById('svcCost').value='¥'+fmt(cost);
+  const br=document.getElementById('svcBreak');
+  if(br)br.textContent='工时合计 '+money(l)+' ＋ 配件合计 '+money(p);
+}
+function saveService(){
+  const names=selectedNames();
+  if(!names.length){toast('请至少选择一项服务');return;}
+  const mileage=parseFloat(document.getElementById('svcMileage').value)||curVehicle().mileage||0;
+  const shop=document.getElementById('svcShop').value.trim();
+  const date=document.getElementById('svcDate').value||today();
+  const note=document.getElementById('svcNote').value.trim();
+  const items=names.map(n=>{const b=curBill[n]||{labor:0,parts:0};return {name:n,labor:+b.labor||0,parts:+b.parts||0};});
+  const labor=items.reduce((s,i)=>s+i.labor,0);
+  const parts=items.reduce((s,i)=>s+i.parts,0);
+  const cost=labor+parts;
+  const rec={id:uid(),vehicleId:CUR,date,mileage,cat:curCat,items,labor,parts,cost,shop,note,receipt:receiptB64};
+  DB.records.unshift(rec);
+  // 更新价格记忆表（下次同项目自动带出）
+  items.forEach(i=>{DB.priceBook[i.name]={labor:i.labor,parts:i.parts,cost:i.labor+i.parts,shop,date};});
+  // 同步车辆里程
+  const v=curVehicle();if(mileage>(parseFloat(v.mileage)||0)){v.mileage=mileage;}
+  // 自动顺延同名提醒
+  DB.reminders.filter(r=>r.vehicleId===CUR&&names.some(it=>r.name.includes(it)||it.includes(r.name))).forEach(r=>{r.lastDate=today();r.lastMileage=mileage;});
+  save();toast('维保记录已保存');
+  // reset form
+  curBill={};customNames=[];
+  document.getElementById('customItem').value='';document.getElementById('svcCost').value='¥0.00';
+  const br=document.getElementById('svcBreak');if(br)br.textContent='';
+  document.getElementById('svcShop').value='';document.getElementById('svcNote').value='';
+  document.getElementById('svcReceipt').value='';document.getElementById('receiptPrev').innerHTML='';receiptB64='';
+  document.getElementById('itemBill').innerHTML='';
+  [...document.querySelectorAll('#catItems .ichip')].forEach(i=>i.classList.remove('on'));
+  updateItemCount();
+  renderAll();showScreen('archive');
+}
+document.getElementById('svcDate').value=today();
+document.getElementById('svcReceipt').addEventListener('change',function(){
+  const f=this.files[0];if(!f)return;const rd=new FileReader();
+  rd.onload=()=>{const img=new Image();img.onload=()=>{
+    const c=document.createElement('canvas');const max=800;let w=img.width,h=img.height;
+    if(w>max){h=h*max/w;w=max;}if(h>max){w=w*max/h;h=max;}
+    c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);
+    receiptB64=c.toDataURL('image/jpeg',0.7);
+    document.getElementById('receiptPrev').innerHTML=`<img class="thumb" src="${receiptB64}">`;
+  };img.src=rd.result;};rd.readAsDataURL(f);
+});
+
+/* ============ 渲染：档案管理 ============ */
+function renderArchive(){
+  document.getElementById('vehicleCards').innerHTML=DB.vehicles.map(v=>`<div class="vcard" data-id="${v.id}">
+    <div class="vcard-del" onclick="delVehicle('${v.id}')">删除</div>
+    <div class="vcard-front" onclick="onVehFront('${v.id}',this)">
+      <div class="row" style="align-items:center">
+        <h3 style="flex:1;margin:0">${esc(v.name)}</h3>
+        <span class="v-edit">编辑 ›</span>
+      </div>
+      <div class="kv"><span>车型</span><b>${esc(v.model)||'—'}</b></div>
+      <div class="kv"><span>动力</span><b>${POWER_LABEL[v.power]||'燃油'}</b></div>
+      <div class="kv"><span>车牌</span><b>${esc(v.plate)||'—'}</b></div>
+      <div class="kv"><span>当前里程</span><b>${fmt(v.mileage)} km</b></div>
+      <div class="kv"><span>保险到期</span><b>${esc(v.insuranceDue)||'—'}</b></div>
+      <div class="kv"><span>年检到期</span><b>${esc(v.inspectionDue)||'—'}</b></div>
+    </div>
+  </div>`).join('');
+  attachSwipe();
+  const recs=DB.records.filter(r=>r.vehicleId===CUR);
+  const box=document.getElementById('recordList');
+  if(!recs.length){box.innerHTML='<div class="empty">当前车辆暂无维保记录。</div>';return;}
+  box.innerHTML=recs.map(r=>`<div class="card">
+    <div class="rec-item">
+      ${r.receipt?`<img class="thumb" src="${r.receipt}" onclick="viewImg('${r.receipt}')">`:''}
+      <div class="body">
+        <div class="t">${esc(r.cat)} · 合计 ${money(r.cost)}</div>
+        <div class="s">工时 ${money(r.labor||0)} ＋ 配件 ${money(r.parts||0)}</div>
+        <div class="s">${r.date}　${fmt(r.mileage)} km　${esc(r.shop)}</div>
+        <div class="s items">${r.items.map(i=>{const nm=typeof i==='string'?i:i.name;const c=(typeof i==='string')?0:((+i.labor||0)+(+i.parts||0));return `<span class="it">${esc(nm)}${c?` <b>${money(c)}</b>`:''}</span>`;}).join('、')}</div>
+        ${r.note?`<div class="s" style="margin-top:3px">备注：${esc(r.note)}</div>`:''}
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn ghost" onclick="delRecord('${r.id}')">删除</button>
+    </div>
+  </div>`).join('');
+}
+function attachSwipe(){
+  document.querySelectorAll('.vcard').forEach(c=>{
+    let sx=0,sy=0;
+    c.addEventListener('touchstart',e=>{const t=e.touches[0];sx=t.clientX;sy=t.clientY;c.classList.remove('swiped');},{passive:true});
+    c.addEventListener('touchmove',e=>{if(!sx)return;const t=e.touches[0];const dx=t.clientX-sx,dy=t.clientY-sy;
+      if(Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>8){e.preventDefault();c.classList.add('dragging');const f=c.querySelector('.vcard-front');f.style.transform='translateX('+Math.max(-88,Math.min(0,dx))+'px)';}
+    },{passive:false});
+    c.addEventListener('touchend',e=>{if(!sx)return;const t=e.changedTouches[0];const dx=t.clientX-sx;const f=c.querySelector('.vcard-front');
+      c.classList.remove('dragging');
+      if(dx<-44){c.classList.add('swiped');f.style.transform='';}else{c.classList.remove('swiped');f.style.transform='';}
+      sx=0;
+    },{passive:true});
+  });
+}
+function onVehFront(id,el){
+  const card=el.closest('.vcard');
+  if(card.classList.contains('swiped')){card.classList.remove('swiped');el.style.transform='';return;}
+  openVehicleModal(id);
+}
+function delVehicle(id){
+  const v=DB.vehicles.find(x=>x.id===id);if(!v)return;
+  if(!confirm('删除车辆「'+v.name+'」？\n该车辆的维保记录、提醒也会一并删除，且不可恢复。'))return;
+  DB.vehicles=DB.vehicles.filter(x=>x.id!==id);
+  DB.records=DB.records.filter(r=>r.vehicleId!==id);
+  DB.reminders=DB.reminders.filter(r=>r.vehicleId!==id);
+  DB.costs=DB.costs.filter(c=>c.vehicleId!==id);
+  if(CUR===id)CUR=DB.vehicles[0]?DB.vehicles[0].id:null;
+  closeModal();save();refreshVehicleSelect();renderArchive();renderAll();toast('车辆已删除');
+}
+function delRecord(id){if(!confirm('确认删除该维保记录？'))return;DB.records=DB.records.filter(x=>x.id!==id);save();renderArchive();toast('已删除')}
+function viewImg(src){const w=window.open('');w.document.write('<img src="'+src+'" style="max-width:100%">')}
+
+/* ============ 渲染：成本统计 ============ */
+function renderFinance(){
+  const range=document.getElementById('finRange').value;
+  const costs=DB.costs.filter(c=>c.vehicleId===CUR).concat(
+    DB.records.filter(r=>r.vehicleId===CUR&&r.cost>0).map(r=>({type:'维保',amount:r.cost,date:r.date}))
+  );
+  const total=costs.reduce((s,c)=>s+(+c.amount||0),0);
+  const now=new Date();const mKey=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  const month=costs.filter(c=>c.date&&c.date.slice(0,7)===mKey).reduce((s,c)=>s+(+c.amount||0),0);
+  document.getElementById('costTotal').textContent=money(total);
+  document.getElementById('costMonth').textContent=money(month);
+  // 按类别
+  const byCat={};costs.forEach(c=>{byCat[c.type]=(byCat[c.type]||0)+(+c.amount||0);});
+  const cats=Object.keys(byCat);
+  document.getElementById('finBreak').innerHTML=cats.length?cats.map(c=>{
+    const p=total?Math.round(byCat[c]/total*100):0;
+    return `<div style="margin:9px 0"><div class="kv" style="border:none;padding:0 0 4px"><span>${c}</span><b>${money(byCat[c])}（${p}%）</b></div><div class="bar"><i style="width:${p}%"></i></div></div>`;
+  }).join(''):'<div class="muted">暂无费用记录。</div>';
+  // 时序图（按月/年）
+  const groups={};
+  costs.forEach(c=>{if(!c.date)return;const k=range==='year'?c.date.slice(0,4):c.date.slice(0,7);groups[k]=(groups[k]||0)+(+c.amount||0);});
+  let keys=Object.keys(groups).sort();
+  if(keys.length>12)keys=keys.slice(-12);
+  const vals=keys.map(k=>groups[k]);
+  const max=Math.max(1,...vals);
+  document.getElementById('finChart').innerHTML=keys.length?(()=>{
+    const W=340,H=176,base=H-24,top=14,inner=base-top;
+    const bw=W/keys.length, barW=Math.min(34,bw*0.56), r=Math.min(7,barW/2);
+    const bars=keys.map((k,i)=>{
+      const h=Math.max(4,inner*vals[i]/max);
+      const x=i*bw+(bw-barW)/2, y=base-h;
+      const lb=k.slice(range==='year'?2:5).replace('-','/')||k;
+      return `<rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="${r}" fill="url(#barGrad)"/>`
+        + `<text x="${x+barW/2}" y="${y-6}" font-size="9.5" font-weight="600" fill="#5c6b7e" text-anchor="middle">${fmt(vals[i])}</text>`
+        + `<text x="${x+barW/2}" y="${H-7}" font-size="9.5" fill="#7b8899" text-anchor="middle">${lb}</text>`;
+    }).join('');
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;height:auto;overflow:visible" role="img" aria-label="费用趋势图">
+      <defs><linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#66c6ff"/><stop offset="1" stop-color="#0a84ff"/>
+      </linearGradient></defs>
+      <line x1="0" y1="${base}" x2="${W}" y2="${base}" stroke="rgba(108,132,160,.22)" stroke-width="1"/>
+      ${bars}
+    </svg>`;
+  })():'<div class="muted">暂无数据可绘图。</div>';
+}
+
+/* ============ 设置 ============ */
+function renderSettings(){
+  const c=nasCfg();
+  document.getElementById('setVeh').textContent=DB.vehicles.length;
+  document.getElementById('pushToggle').checked=!!DB.settings.push;
+  document.getElementById('ruleList').innerHTML=DB.rules.length?DB.rules.map(r=>{
+    const cyc=[r.months?r.months+'个月':'',r.km?fmt(r.km)+'km':''].filter(Boolean).join(' / ')||'未设';
+    const tag=r.model?`<span class="rtag">${esc(r.model)}</span>`:'<span class="rtag muted-tag">通用</span>';
+    return `<div class="kv"><span>${esc(r.name)} ${tag}</span><b>${cyc}</b></div>`;
+  }).join(''):'<div class="muted">尚未设置保养规则。</div>';
+  // NAS 同步表单回填（输入框聚焦时不覆盖正在输入的值）
+  const nt=document.getElementById('nasToggle'); if(nt)nt.checked=!!c.on;
+  const nf=document.getElementById('nasFields'); if(nf)nf.classList.toggle('hidden',!c.on);
+  const nb=document.getElementById('nasBase'); if(nb&&document.activeElement!==nb)nb.value=c.base||'';
+  const nk=document.getElementById('nasKey'); if(nk&&document.activeElement!==nk)nk.value=c.key||'';
+  updateNasUI();
+}
+function togglePush(){
+  DB.settings.push=document.getElementById('pushToggle').checked;
+  if(DB.settings.push){Notification.requestPermission().then(p=>{if(p!=='granted'){toast('系统未授权通知');DB.settings.push=false;document.getElementById('pushToggle').checked=false;}});}
+  save();
+}
+function pushNotify(title,body){
+  if(DB.settings.push&&'Notification'in window&&Notification.permission==='granted'){try{new Notification(title,{body});}catch(e){}}
+}
+function checkPushOnLoad(){
+  if(DB.settings.push&&'Notification'in window&&Notification.permission==='granted'){
+    const due=DB.reminders.filter(r=>r.vehicleId===CUR&&evalReminder(r).status!=='ok');
+    due.forEach(r=>{const e=evalReminder(r);pushNotify('保养提醒：'+r.name,e.detail.join('，'));});
+  }
+}
+
+/* ============ 弹窗：通用 ============ */
+function openModal(html){
+  document.getElementById('modalRoot').innerHTML=`<div class="modal" onclick="if(event.target===this)closeModal()"><div class="sheet"><div class="modal-head"><b style="font-size:17px">${''}</b><button onclick="closeModal()">×</button></div>${html}</div></div>`;
+}
+function closeModal(){document.getElementById('modalRoot').innerHTML=''}
+
+const PROVINCES=['京','津','沪','渝','冀','豫','云','辽','黑','湘','皖','鲁','新','苏','浙','赣','鄂','桂','甘','晋','蒙','陕','吉','闽','贵','粤','青','藏','川','宁','琼'];
+function splitPlate(p){const m=(p||'').match(/^([一-龥]+)/);const prov=m?m[1]:'';const no=(p||'').replace(/[一-龥·•・\s]/g,'').toUpperCase();return {prov,no};}
+function openVehicleModal(id){
+  const v=id?DB.vehicles.find(x=>x.id===id):{name:'',model:'',plate:'',vin:'',buyDate:'',mileage:0,insuranceDue:'',inspectionDue:'',power:'fuel'};
+  const sp=splitPlate(v.plate);
+  openModal(`<h2>${id?'编辑':'添加'}车辆</h2>
+    <label>名称（必填）</label><input id="vName" value="${esc(v.name)}" placeholder="如：家用轿车 / 沪A·12345">
+    <label>车型</label><input id="vModel" value="${esc(v.model)}" placeholder="如：丰田 卡罗拉 1.2T">
+    <label>动力类型</label>
+    <select id="vPower">${Object.keys(POWER_LABEL).map(k=>`<option value="${k}"${(v.power||'fuel')===k?' selected':''}>${POWER_LABEL[k]}</option>`).join('')}</select>
+    <label>车牌</label>
+    <div class="plate-row">
+      <select id="vPlateProv" class="plate-prov">${sp.prov?'<option value="">省</option>':'<option value="" selected>省</option>'}${PROVINCES.map(p=>`<option value="${p}"${sp.prov===p?' selected':''}>${p}</option>`).join('')}</select>
+      <input id="vPlateNo" class="plate-no" value="${esc(sp.no)}" placeholder="字母+数字" maxlength="7" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')">
+    </div>
+    <label>车架号 VIN</label><input id="vVin" value="${esc(v.vin)}">
+    <label>购买日期</label><input id="vBuy" type="date" value="${esc(v.buyDate)}">
+    <label>当前里程 (km)</label><input id="vMil" type="number" value="${esc(v.mileage)}">
+    <label>保险到期日</label><input id="vIns" type="date" value="${esc(v.insuranceDue)}">
+    <label>年检到期日</label><input id="vYr" type="date" value="${esc(v.inspectionDue)}">
+    <button class="btn" style="width:100%;margin-top:14px" onclick="saveVehicle('${id||''}')">保存</button>
+    ${id?`<button class="btn del" style="width:100%" onclick="delVehicle('${id}')">删除该车辆</button>`:''}`);
+  const pv=document.getElementById('vPlateProv'); if(pv&&sp.prov) pv.value=sp.prov;
+}
+function saveVehicle(id){
+  const name=document.getElementById('vName').value.trim();if(!name){toast('请填写车辆名称');return;}
+  const plateProv=document.getElementById('vPlateProv').value;const plateNo=document.getElementById('vPlateNo').value.trim().toUpperCase();const plate=plateProv?(plateProv+'·'+plateNo):plateNo;
+  const data={name,model:document.getElementById('vModel').value.trim(),power:document.getElementById('vPower').value||'fuel',plate,
+    vin:document.getElementById('vVin').value.trim(),buyDate:document.getElementById('vBuy').value,
+    mileage:parseFloat(document.getElementById('vMil').value)||0,insuranceDue:document.getElementById('vIns').value,inspectionDue:document.getElementById('vYr').value};
+  if(id){Object.assign(DB.vehicles.find(x=>x.id===id),data);}
+  else{data.id=uid();DB.vehicles.push(data);CUR=data.id;}
+  // 保险/年检自动生成提醒
+  if(data.insuranceDue){ensureDateReminder(data.id,'保险续费',data.insuranceDue);}
+  if(data.inspectionDue){ensureDateReminder(data.id,'年检',data.inspectionDue);}
+  ensureDefaultRules(); // 动力类型变化时补齐对应模板
+  save();closeModal();refreshVehicleSelect();renderAll();toast('车辆已保存');
+}
+function ensureDateReminder(vid,name,due){
+  const r=DB.reminders.find(x=>x.vehicleId===vid&&x.name===name);
+  if(r){r.lastDate=due;r.basis='date';r.months=12;}else{
+    DB.reminders.push({id:uid(),vehicleId:vid,name,basis:'date',months:12,km:0,lastDate:due,lastMileage:0,enabled:true});
+  }
+}
+
+function quickAddReminder(){openReminderModal()}
+function editReminder(id){openReminderModal(id)}
+function addReminderFromRule(rid){
+  const r=DB.rules.find(x=>x.id===rid);if(!r)return;
+  // 模板预填：名称与周期带走，用户只需填"上次日期/里程"=数据
+  openReminderModal(null,{name:r.name,basis:(r.km&&r.months)?'both':(r.km?'mileage':'date'),months:r.months||0,km:r.km||0});
+}
+function openReminderModal(id,preset){
+  let r;
+  if(id){r=DB.reminders.find(x=>x.id===id);}
+  else if(preset){r={name:preset.name||'',basis:preset.basis||'both',months:preset.months||0,km:preset.km||0,lastDate:today(),lastMileage:curVehicle().mileage||0};}
+  else{r={name:'',basis:'both',months:6,km:5000,lastDate:today(),lastMileage:curVehicle().mileage||0};}
+  openModal(`<h2>${id?'编辑':'添加'}提醒</h2>
+    <label>提醒名称</label><input id="rName" value="${esc(r.name)}" placeholder="如：机油保养 / 保险续费">
+    <label>触发维度</label>
+    <select id="rBasis">
+      <option value="both" ${r.basis==='both'?'selected':''}>日期 + 里程（双维度）</option>
+      <option value="date" ${r.basis==='date'?'selected':''}>仅按日期</option>
+      <option value="mileage" ${r.basis==='mileage'?'selected':''}>仅按里程</option>
+    </select>
+    <div class="grid2">
+      <div><label>间隔(月)</label><input id="rMonths" type="number" value="${esc(r.months||0)}"></div>
+      <div><label>间隔(km)</label><input id="rKm" type="number" value="${esc(r.km||0)}"></div>
+    </div>
+    <div class="grid2">
+      <div><label>上次日期</label><input id="rLd" type="date" value="${esc(r.lastDate||'')}"></div>
+      <div><label>上次里程</label><input id="rLm" type="number" value="${esc(r.lastMileage||0)}"></div>
+    </div>
+    <label>套用常用规则</label>
+    <select id="rRule"><option value="">不套用</option>${DB.rules.map(x=>`<option value="${x.id}">${esc(x.name)}（${[x.months?x.months+'月':'',x.km?fmt(x.km)+'km':''].filter(Boolean).join('/')}）</option>`).join('')}</select>
+    <button class="btn" style="width:100%;margin-top:14px" onclick="saveReminder('${id||''}')">保存提醒</button>`);
+  document.getElementById('rRule').onchange=function(){
+    const x=DB.rules.find(z=>z.id===this.value);if(x){document.getElementById('rMonths').value=x.months||0;document.getElementById('rKm').value=x.km||0;}
+  };
+}
+function saveReminder(id){
+  const name=document.getElementById('rName').value.trim();if(!name){toast('请填写提醒名称');return;}
+  const data={name,vehicleId:CUR,basis:document.getElementById('rBasis').value,
+    months:parseInt(document.getElementById('rMonths').value)||0,km:parseInt(document.getElementById('rKm').value)||0,
+    lastDate:document.getElementById('rLd').value,lastMileage:parseFloat(document.getElementById('rLm').value)||0,enabled:true};
+  if(id){Object.assign(DB.reminders.find(x=>x.id===id),data);}else{data.id=uid();DB.reminders.push(data);}
+  save();closeModal();renderReminders();toast('提醒已保存');
+}
+
+function openRuleModal(){
+  const vopts=DB.vehicles.map(v=>`<option value="${esc(v.name)}" ${v.id===CUR?'selected':''}>${esc(v.name)}</option>`).join('');
+  openModal(`<h2>新增保养规则</h2>
+    <label>规则名称</label><input id="rn" placeholder="如：变速箱油">
+    <label>适用车型</label>
+    <select id="rmodel"><option value="">通用（所有车）</option>${vopts}</select>
+    <div class="grid2">
+      <div><label>间隔(月)</label><input id="rm" type="number" value="0"></div>
+      <div><label>间隔(km)</label><input id="rk" type="number" value="0"></div>
+    </div>
+    <button class="btn" style="width:100%;margin-top:14px" onclick="saveRule()">保存规则</button>`);
+}
+function saveRule(){
+  const name=document.getElementById('rn').value.trim();if(!name){toast('请填写名称');return;}
+  const model=(document.getElementById('rmodel').value||'').trim();
+  DB.rules.push({id:uid(),name,model,months:parseInt(document.getElementById('rm').value)||0,km:parseInt(document.getElementById('rk').value)||0});
+  save();closeModal();renderSettings();toast('规则已保存');
+}
+
+function openCostModal(){
+  openModal(`<h2>记一笔养车费用</h2>
+    <label>类型</label>
+    <select id="cType">
+      <option>油费</option><option>保险</option><option>维修</option><option>停车/过路</option><option>其他</option>
+    </select>
+    <label>金额 (¥)</label><input id="cAmt" type="number" inputmode="decimal" placeholder="0.00">
+    <label>日期</label><input id="cDate" type="date" value="${today()}">
+    <label>备注</label><input id="cNote" placeholder="如：中石化 95# / 交强险">
+    <button class="btn" style="width:100%;margin-top:14px" onclick="saveCost()">保存</button>`);
+}
+function saveCost(){
+  const amt=parseFloat(document.getElementById('cAmt').value)||0;if(!amt){toast('请填写金额');return;}
+  DB.costs.unshift({id:uid(),vehicleId:CUR,type:document.getElementById('cType').value,amount:amt,date:document.getElementById('cDate').value||today(),note:document.getElementById('cNote').value.trim()});
+  save();closeModal();renderFinance();toast('已记录');
+}
+
+/* ============ 导出 ============ */
+function exportData(type){
+  const recs=DB.records.filter(r=>r.vehicleId===CUR);
+  if(type==='csv'){
+    const head=['日期','里程','类别','项目','工时费','配件费','合计','门店','备注'];
+    const rows=recs.map(r=>[r.date,r.mileage,r.cat,r.items.map(i=>typeof i==='string'?i:i.name).join('/'),r.labor||0,r.parts||0,r.cost,r.shop,r.note].map(x=>`"${String(x||'').replace(/"/g,'""')}"`).join(','));
+    const csv='\uFEFF'+head.join(',')+'\n'+rows.join('\n');
+    const blob=new Blob([csv],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+    a.download=vehName(CUR)+'_维保记录.csv';a.click();toast('CSV 已导出');
+  }else{
+    const v=curVehicle();
+    const w=window.open('');w.document.write(`<html><head><meta charset="utf-8"><title>${esc(v.name)} 维保记录</title>
+    <style>body{font-family:sans-serif;padding:24px;color:#1f2733} h1{font-size:18px} table{width:100%;border-collapse:collapse;margin-top:12px;font-size:12px} td,th{border:1px solid #ddd;padding:6px;text-align:left} th{background:#f4f6f9} .sum{margin-top:14px;font-weight:700} @media print{.nop{display:none}}</style></head><body>
+    <h1>${esc(v.name)} 维保与车况记录</h1>
+    <div>车型：${esc(v.model)||'—'}　车牌：${esc(v.plate)||'—'}　当前里程：${fmt(v.mileage)} km</div>
+    <button class="nop" onclick="window.print()" style="margin:12px 0;padding:8px 16px">打印 / 另存为 PDF</button>
+    <table><tr><th>日期</th><th>里程</th><th>类别</th><th>项目</th><th>工时费</th><th>配件费</th><th>合计</th><th>门店</th></tr>
+    ${recs.map(r=>`<tr><td>${r.date}</td><td>${fmt(r.mileage)}</td><td>${esc(r.cat)}</td><td>${r.items.map(i=>`${esc(typeof i==='string'?i:i.name)}<br><span style="color:#6b7785">工时${fmt(i.labor||0)}+配件${fmt(i.parts||0)}</span>`).join('<br><br>')}</td><td>${fmt(r.labor||0)}</td><td>${fmt(r.parts||0)}</td><td>${fmt(r.cost)}</td><td>${esc(r.shop)}</td></tr>`).join('')}
+    </table>
+    <div class="sum">维保累计费用：${money(recs.reduce((s,r)=>s+(+r.cost||0),0))}</div>
+    <div style="margin-top:18px;color:#6b7785;font-size:11px">本记录由「车管家」生成，可作为车辆养护与二手交易车况证明。</div>
+    </body></html>`);
+  }
+}
+function importData(){
+  const inp=document.createElement('input');inp.type='file';inp.accept='.json';inp.onchange=()=>{
+    const f=inp.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{const d=JSON.parse(rd.result);DB=Object.assign(DB,d);DB.priceBook=DB.priceBook||{};save();refreshVehicleSelect();renderAll();toast('备份已导入');}catch(e){toast('文件格式错误');}};rd.readAsText(f);
+  };inp.click();
+}
+function loadDemo(){
+  if(!confirm('将填充示例车辆与数据（不覆盖现有车辆）？'))return;
+  const vid=uid();
+  DB.vehicles.push({id:vid,name:'示例·大众朗逸',model:'大众 朗逸 1.5L',plate:'沪A·D8888',vin:'LV2A23B8XN1234567',buyDate:'2023-05-01',mileage:32800,insuranceDue:addMonths(today(),3),inspectionDue:addMonths(today(),8),power:'fuel'});
+  DB.reminders.push({id:uid(),vehicleId:vid,name:'机油+机滤',basis:'both',months:6,km:5000,lastDate:addMonths(today(),-5),lastMileage:28000,enabled:true});
+  DB.reminders.push({id:uid(),vehicleId:vid,name:'保险续费',basis:'date',months:12,km:0,lastDate:addMonths(today(),-9),lastMileage:0,enabled:true});
+  DB.reminders.push({id:uid(),vehicleId:vid,name:'刹车片检查',basis:'mileage',months:0,km:40000,lastDate:addMonths(today(),-2),lastMileage:28000,enabled:true});
+  DB.records.push({id:uid(),vehicleId:vid,date:addMonths(today(),-5),mileage:28000,cat:'常规保养',items:[{name:'更换机油',labor:120,parts:300},{name:'机油滤清器',labor:0,parts:50}],labor:120,parts:350,cost:470,shop:'途虎养车',note:'含全合成机油',receipt:''});
+  DB.records.push({id:uid(),vehicleId:vid,date:addMonths(today(),-2),mileage:31000,cat:'易损件更换',items:[{name:'雨刮片更换',labor:0,parts:45}],labor:0,parts:45,cost:45,shop:'途虎养车',note:'无骨雨刮一对',receipt:''});
+  DB.costs.push({id:uid(),vehicleId:vid,type:'油费',amount:300,date:addMonths(today(),-1),note:'中石化95#'});
+  DB.records.forEach(r=>r.items.forEach(i=>{if(typeof i==='object')DB.priceBook[i.name]={labor:i.labor,parts:i.parts,cost:i.labor+i.parts,shop:r.shop,date:r.date};}));
+  CUR=vid;save();refreshVehicleSelect();renderAll();toast('示例数据已填充');
+}
+function resetAll(){
+  let tip='将清空全部数据，且不可恢复！确认？';
+  if(nasCfg().on)tip='已开启 NAS 同步：清空后服务器上的备份也会被覆盖成空库！建议先到「设置」关掉同步再清空。仍要继续吗？';
+  if(!confirm(tip))return;
+  DB={vehicles:[],records:[],reminders:[],costs:[],rules:[],priceBook:{},settings:{push:false}};
+  save();load().then(()=>{refreshVehicleSelect();renderAll();toast('已清空');});
+}
+
+/* ============ 导航与启动 ============ */
+/* 液态玻璃镜头：滑到当前 tab，带拖尾、撞击挤压与回弹 */
+let _lensReady=false,_lensRaf=0;
+function moveNavLens(instant){
+  const nav=document.getElementById('nav');
+  const lens=document.getElementById('navLens');
+  const trail=document.getElementById('navLensTrail');
+  if(!nav||!lens)return;
+  const btn=nav.querySelector('button.on');
+  if(!btn)return;
+  const nb=nav.getBoundingClientRect(), rb=btn.getBoundingClientRect();
+  if(!nb.width||!rb.width)return;              /* 页面还没排版，等下一次 */
+  const w=Math.round(rb.width), h=Math.round(rb.height);
+  const x=Math.round(rb.left-nb.left), y=Math.round(rb.top-nb.top);
+  const prevX=parseFloat(lens.dataset.lastX||'');
+  const far=isNaN(prevX)?999:Math.abs(prevX-x);
+  lens.dataset.lastX=x;
+  if(!_lensReady)instant=true;
+  if(instant){
+    [lens,trail].forEach(el=>{ if(el)el.style.transition='none'; });
+  }
+  const br=getComputedStyle(btn).borderRadius;
+  [lens,trail].forEach(el=>{
+    if(!el)return;
+    el.style.width=w+'px'; el.style.height=h+'px';
+    if(br)el.style.borderRadius=br;               /* 跟随按钮圆角（手机 22px / 桌面 18px） */
+    el.style.transform='translate('+x+'px,'+y+'px)';
+  });
+  if(instant){
+    void lens.offsetWidth;                        /* 强制落位，避免首帧从 (0,0) 滑进来 */
+    [lens,trail].forEach(el=>{ if(el)el.style.transition=''; });
+    _lensReady=true;
+    return;
+  }
+  /* 液滴受到惯性挤压：横向拉长、纵向压扁，再回弹归位 */
+  const fill=lens.querySelector('.lens-fill');
+  if(fill&&fill.animate){
+    if(far>4){
+      fill.animate([
+        {transform:'scale(1,1)'},
+        {transform:'scale(1.1,.9)',offset:.26},
+        {transform:'scale(.975,1.045)',offset:.64},
+        {transform:'scale(1,1)'}
+      ],{duration:560,easing:'cubic-bezier(.33,.9,.32,1)'});
+    }
+  }
+}
+function popNavIcon(btn){
+  const ic=btn&&btn.querySelector('.ic');
+  if(!ic||!ic.animate)return;
+  ic.animate([
+    {transform:'scale(.9)'},
+    {transform:'scale(1.09)',offset:.5},
+    {transform:'scale(1)'}
+  ],{duration:430,easing:'cubic-bezier(.34,1.3,.38,1)'});
+}
+window.addEventListener('resize',()=>{
+  cancelAnimationFrame(_lensRaf);
+  _lensRaf=requestAnimationFrame(()=>moveNavLens(true));
+});
+window.addEventListener('orientationchange',()=>setTimeout(()=>moveNavLens(true),260));
+
+function showScreen(s){
+  document.querySelectorAll('.screen').forEach(x=>x.classList.add('hidden'));
+  document.getElementById('screen-'+s).classList.remove('hidden');
+  const prev=document.querySelector('#nav button.on');
+  document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.screen===s));
+  const now=document.querySelector('#nav button.on');
+  if(now&&now!==prev){moveNavLens();popNavIcon(now);}
+  else if(!_lensReady)moveNavLens(true);
+  document.getElementById('fab').classList.toggle('hidden',s!=='reminders');
+  if(s==='reminders')renderReminders();
+  if(s==='archive')renderArchive();
+  if(s==='finance')renderFinance();
+  if(s==='settings')renderSettings();
+  if(s==='services'){curBill={};customNames=[];document.getElementById('svcMileage').value=curVehicle().mileage||'';renderCatTabs();renderItemBill();}
+}
+function refreshVehicleSelect(){
+  const sel=document.getElementById('vehicleSelect');
+  sel.innerHTML=DB.vehicles.map(v=>`<option value="${v.id}">${esc(v.name)}${v.plate?' '+esc(v.plate):''}</option>`).join('');
+  sel.value=CUR;
+  sel.onchange=()=>{CUR=sel.value;renderAll();};
+}
+function renderAll(){refreshVehicleSelect();renderReminders();renderArchive();renderFinance();renderSettings();}
+
+async function init(){
+  await detectMode();
+  setModeBadge();
+  if('serviceWorker'in navigator){try{navigator.serviceWorker.register('./sw.js');}catch(e){}}
+  setupInstall();
+  await load();
+  updateNasUI(); // load 内首次同步后刷新连接状态
+  refreshVehicleSelect();
+  showScreen('reminders');
+  checkPushOnLoad();
+}
+/* ============ 安装到手机（PWA） ============ */
+let deferredPrompt=null;
+function isIOS(){return /iphone|ipad|ipod/i.test(navigator.userAgent)&&!window.MSStream;}
+function setupInstall(){
+  const btn=document.getElementById('installBtn');
+  const hint=document.getElementById('installHint');
+  // 完全离线 WebView 版内：本身就是独立 App，隐藏 PWA 安装入口
+  if(location.hostname==='appassets.androidplatform.net'){
+    const c=document.getElementById('installCard');if(c)c.classList.add('hidden');
+    return;
+  }
+  window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;
+    if(btn)btn.classList.remove('hidden');
+    if(hint)hint.textContent='点击上方按钮，按系统提示「安装」即可生成独立 App。';
+    if(!localStorage.getItem('cc_install_toast')){toast('可安装到手机：设置→安装到手机');localStorage.setItem('cc_install_toast','1');}
+  });
+  window.addEventListener('appinstalled',()=>{deferredPrompt=null;if(btn)btn.classList.add('hidden');if(hint)hint.textContent='已安装，感谢使用 🎉';toast('已安装到手机');});
+  updateInstallUI();
+}
+function updateInstallUI(){
+  const btn=document.getElementById('installBtn');
+  const hint=document.getElementById('installHint');
+  if(!hint)return;
+  if(isIOS()){if(btn)btn.classList.add('hidden');hint.innerHTML='iPhone：用 <b>Safari</b> 打开本页 → 点底部「分享」→「添加到主屏幕」即可生成独立 App。';return;}
+  if(!window.isSecureContext){
+    if(btn)btn.classList.add('hidden');
+    hint.innerHTML='⚠️ 当前访问地址 <b style="color:#e0413b">'+esc(location.host)+'</b> 不是「安全地址」，浏览器不会弹出安装。<br>常见原因：用了 <b>100. 开头的内网(CGNAT)地址</b>，或在 <b>微信内置浏览器</b> 打开。<br><br><b>正确做法：</b><br>1️⃣ 手机连家里 WiFi，用浏览器打开 NAS 的<b>局域网地址 192.168.x.x:8143</b><br>2️⃣ 用 <b>Chrome / Edge</b> 打开（应用商店下载），<u>不要用微信</u><br>3️⃣ 打开后点右上角 <b>⋮</b> →「安装应用」/「添加到主屏幕」<br><span style="color:#888;font-size:12px">注：已装过又删了需先卸载再装；已装则不再弹。</span>';
+    return;
+  }
+  if(btn)btn.classList.remove('hidden');
+  hint.textContent='点击下方按钮按系统提示安装；若按钮无反应，也可点浏览器右上角 ⋮ →「安装应用」/「添加到主屏幕」。';
+}
+function installApp(){
+  if(deferredPrompt){deferredPrompt.prompt();deferredPrompt.userChoice.then(c=>{deferredPrompt=null;const b=document.getElementById('installBtn');if(b)b.classList.add('hidden');});return;}
+  const hint=document.getElementById('installHint');
+  if(isIOS()){
+    if(hint)hint.innerHTML='iPhone：用 <b>Safari</b> 打开本页 → 点底部「分享」→「添加到主屏幕」即可生成独立 App。';
+  } else if(hint){
+    if(window.isSecureContext){
+      hint.innerHTML='若上方按钮无反应，请点浏览器右上角 <b>⋮</b> →「<b>安装应用</b>」或「<b>添加到主屏幕</b>」，确认后桌面生成「车管家」图标。<br><span style="color:#888;font-size:12px">已装过则不会再弹，需先卸载再装。</span>';
+    } else {
+      updateInstallUI();
+    }
+  }
+}
+init();
+</script>
+</body>
+</html>

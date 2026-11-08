@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 启动画面：与网页壁纸同色系的浅蓝渐变 + 居中 App 图标 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:startColor="#EFF5FF"
+                android:centerColor="#E6EEFB"
+                android:endColor="#E9F2FA"
+                android:type="linear" />
+        </shape>
+    </item>
+    <item
+        android:width="104dp"
+        android:height="104dp"
+        android:gravity="center"
+        android:drawable="@drawable/splash_icon" />
+</layer-list>

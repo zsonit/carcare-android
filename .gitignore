@@ -1,0 +1,17 @@
+# Gradle / 构建产物
+.gradle/
+build/
+app/build/
+local.properties
+*.iml
+.idea/
+captures/
+# 开发用临时文件
+tools/_shots/
+tools/_render.html
+tools/_full.png
+tools/_bg.png
+tools/_fg.png
+tools/_icon_preview.png
+# 打包好的安装包不入库（走 Releases / Actions artifact）
+dist/*.apk

@@ -1,0 +1,70 @@
+plugins {
+    id 'com.android.application'
+}
+
+/*
+ * 签名：keystore/carcare-release.jks（仓库内自带，保证多台机器 / CI 出的包签名一致，
+ * 后续版本才能覆盖升级）。密码可用 -PCC_STORE_PASS=... 覆盖。
+ */
+def storePass = (project.findProperty('CC_STORE_PASS') ?: 'carcare2026')
+def keyPass = (project.findProperty('CC_KEY_PASS') ?: storePass)
+
+android {
+    namespace 'com.zsonit.carcare'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.zsonit.carcare"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "2.2.0"
+        resourceConfigurations += ['zh', 'en']
+    }
+
+    signingConfigs {
+        release {
+            storeFile rootProject.file('keystore/carcare-release.jks')
+            storePassword storePass
+            keyAlias 'carcare'
+            keyPassword keyPass
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false
+            signingConfig signingConfigs.release
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            applicationIdSuffix '.debug'
+            versionNameSuffix '-debug'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    // 离线构建环境不跑 lint（不影响产物）
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+
+    packagingOptions {
+        resources.excludes += ['META-INF/*.kotlin_module']
+    }
+
+    androidResources {
+        // 网页资源原样打包，不做压缩（服务端要按字节读）
+        noCompress += ['html', 'js', 'json', 'svg']
+    }
+}
+
+dependencies {
+    // 刻意零依赖：外壳只用 Android Framework API，包体最小、无需联网解析依赖
+}

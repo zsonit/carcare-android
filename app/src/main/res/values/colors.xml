@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 与网页品牌色 / 壁纸基色保持一致 -->
+    <color name="brand">#0A84FF</color>
+    <color name="brand_dark">#0068D8</color>
+    <color name="splash_bg">#EAF1FB</color>
+    <color name="ink">#0B1A2B</color>
+    <color name="ink_sub">#5C6B7E</color>
+    <color name="sheet_bg">#F5F9FF</color>
+    <color name="hairline">#1F6C84A0</color>
+</resources>
