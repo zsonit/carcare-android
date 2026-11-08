@@ -27,18 +27,31 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties', '**/*.gradle') }}
+          restore-keys: gradle-${{ runner.os }}-
+
       - name: Build release APK
         run: |
           chmod +x gradlew
           APK=app/build/outputs/apk/release/app-release.apk
-          # runner 拉 gradle 发行包偶尔超时，重试三次
           set +e
-          for i in 1 2 3; do
+          # 先用仓库里的 wrapper（版本固定）；runner 拉发行包偶尔超时，再退到镜像自带的 gradle
+          ./gradlew :app:assembleRelease --no-daemon --console=plain
+          if [ ! -f "$APK" ]; then
+            echo "==> wrapper failed, falling back to preinstalled gradle"
+            gradle -v || true
+            gradle :app:assembleRelease --no-daemon --console=plain
+          fi
+          if [ ! -f "$APK" ]; then
+            echo "==> retry wrapper once more"
             ./gradlew :app:assembleRelease --no-daemon --console=plain
-            if [ -f "$APK" ]; then break; fi
-            echo "retry $i ..."
-            sleep 15
-          done
+          fi
           set -e
           test -f "$APK" || { echo "APK not built"; exit 1; }
 
