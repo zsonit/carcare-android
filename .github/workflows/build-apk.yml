@@ -30,7 +30,17 @@ jobs:
       - name: Build release APK
         run: |
           chmod +x gradlew
-          ./gradlew :app:assembleRelease --no-daemon --console=plain
+          APK=app/build/outputs/apk/release/app-release.apk
+          # runner 拉 gradle 发行包偶尔超时，重试三次
+          set +e
+          for i in 1 2 3; do
+            ./gradlew :app:assembleRelease --no-daemon --console=plain
+            if [ -f "$APK" ]; then break; fi
+            echo "retry $i ..."
+            sleep 15
+          done
+          set -e
+          test -f "$APK" || { echo "APK not built"; exit 1; }
 
       - name: Package artifact
         run: |
