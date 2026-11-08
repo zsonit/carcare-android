@@ -245,9 +245,11 @@ public class CarBridge {
 
     private void previewImage(String dataUrl) {
         if (dataUrl == null || dataUrl.isEmpty()) return;
-        Intent i = new Intent(act, ImageViewerActivity.class);
-        i.putExtra(ImageViewerActivity.EXTRA_DATA_URL, dataUrl);
-        act.startActivity(i);
+        act.runOnUiThread(() -> {
+            Intent i = new Intent(act, ImageViewerActivity.class);
+            i.putExtra(ImageViewerActivity.EXTRA_DATA_URL, dataUrl);
+            act.startActivity(i);
+        });
     }
 
     // ------------------------------------------------------------ 小工具

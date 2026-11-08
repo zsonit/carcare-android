@@ -182,12 +182,16 @@ public class LocalAssetServer {
             while ((n = is.read(buf)) > 0) bos.write(buf, 0, n);
             String html = new String(bos.toByteArray(), "UTF-8");
             String tag = "<script src=\"cc-android.js\"></script>";
-            int at = html.indexOf("<head>");
+            // 插到 charset 之后、页面自身脚本之前
+            String anchor = "<meta charset=\"UTF-8\">";
+            int at = html.indexOf(anchor);
             if (at >= 0) {
-                html = html.substring(0, at + 6) + tag + html.substring(at + 6);
+                at += anchor.length();
             } else {
-                html = tag + html;
+                at = html.indexOf("<head>");
+                at = at >= 0 ? at + 6 : 0;
             }
+            html = html.substring(0, at) + tag + html.substring(at);
             indexHtml = html.getBytes("UTF-8");
             return indexHtml;
         } catch (IOException e) {
