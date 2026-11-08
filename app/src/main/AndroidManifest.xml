@@ -11,6 +11,9 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <!-- 拍照上传凭证走系统相机，不申请相机权限（由相机 App 自己授权） -->
+    <!-- AI 对话按住说话：应用内识别需要本 App 录音权限（语音记账仍走系统识别器，无需权限） -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <queries>
         <intent>
             <action android:name="android.media.action.IMAGE_CAPTURE" />
@@ -22,6 +25,10 @@
         <!-- 语音记账：调系统语音识别（不申请录音权限，由识别器自己处理） -->
         <intent>
             <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
+        <!-- AI 按住说话：应用内 SpeechRecognizer 绑定识别服务（Android 11+ 需显式声明可见性） -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
         </intent>
     </queries>
 

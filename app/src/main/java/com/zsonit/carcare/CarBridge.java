@@ -109,6 +109,14 @@ public class CarBridge {
                 case "voice":
                     act.runOnUiThread(() -> act.startVoiceInput());
                     break;
+                case "aiVoiceStart":
+                    // AI 对话按住说话：按住开始识别
+                    act.runOnUiThread(() -> act.startVoiceHold());
+                    break;
+                case "aiVoiceEnd":
+                    // 松开结束；cancel=true 表示上滑取消
+                    act.runOnUiThread(() -> act.releaseVoiceHold(o.optBoolean("cancel", false)));
+                    break;
                 case "ai":
                     // 大模型请求由原生代发（WebView 直连会被 CORS 拦），流式回吐给网页
                     AIHttp.start(act, o.optString("id"), o.optString("url"),

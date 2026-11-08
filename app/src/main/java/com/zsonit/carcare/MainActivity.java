@@ -44,6 +44,7 @@ public class MainActivity extends Activity {
     private static final int REQ_FILE = 1001;
     private static final int REQ_NOTIF = 1003;
     private static final int REQ_VOICE = 1004;
+    private static final int REQ_HOLD_VOICE = 1005;
 
     private WebView web;
     private LocalAssetServer server;
@@ -308,6 +309,13 @@ public class MainActivity extends Activity {
         if (requestCode == REQ_NOTIF) {
             boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
             if (bridge != null) bridge.onNotificationPermission(granted);
+            return;
+        }
+        if (requestCode == REQ_HOLD_VOICE) {
+            boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+            android.widget.Toast.makeText(this,
+                    granted ? "已允许麦克风，再按一次即可说话" : "未允许麦克风，按住说话不可用",
+                    android.widget.Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -423,6 +431,184 @@ public class MainActivity extends Activity {
                 .edit().putInt("badge", count).apply();
     }
 
+    // ------------------------------------------------------------ AI 对话按住说话
+
+    private android.speech.SpeechRecognizer holdRecognizer;
+    private volatile boolean holdActive;
+    private volatile boolean holdAwaitingFinal;
+    private String holdLastText = "";
+    private final android.os.Handler holdHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private Runnable holdTimeout;
+    private Runnable holdFinalFallback;
+
+    /**
+     * 应用内 SpeechRecognizer（区别于语音记账的系统识别器弹窗）：
+     * 按住开始识别、边说边回传部分结果，松开把最终文字交给网页直接发问。
+     */
+    void startVoiceHold() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                && checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                        != PackageManager.PERMISSION_GRANTED) {
+            // 权限弹窗会打断「按住」手势：先把网页浮层收起，授权后再按一次即可
+            evaluateJs("ccAiVoiceCancel()");
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQ_HOLD_VOICE);
+            return;
+        }
+        beginVoiceHold();
+    }
+
+    private void beginVoiceHold() {
+        if (!android.speech.SpeechRecognizer.isRecognitionAvailable(this)) {
+            failVoiceHold("没找到语音识别服务，可在系统设置里检查「语音服务」");
+            return;
+        }
+        destroyHoldRecognizer();
+        holdActive = true;
+        holdAwaitingFinal = false;
+        holdLastText = "";
+        try {
+            holdRecognizer = android.speech.SpeechRecognizer.createSpeechRecognizer(this);
+            holdRecognizer.setRecognitionListener(new android.speech.RecognitionListener() {
+                @Override public void onReadyForSpeech(Bundle params) { }
+                @Override public void onBeginningOfSpeech() { }
+                @Override public void onRmsChanged(float rmsdB) { }
+                @Override public void onBufferReceived(byte[] buffer) { }
+                @Override public void onEndOfSpeech() { }
+                @Override public void onEvent(int eventType, Bundle params) { }
+
+                @Override
+                public void onPartialResults(Bundle partialResults) {
+                    String t = firstRecognition(partialResults);
+                    if (t != null && !t.isEmpty()) {
+                        holdLastText = t;
+                        if (holdActive) {
+                            evaluateJs("ccAiVoicePartial(" + org.json.JSONObject.quote(t) + ")");
+                        }
+                    }
+                }
+
+                @Override
+                public void onResults(Bundle results) {
+                    finishVoiceHold(firstRecognition(results));
+                }
+
+                @Override
+                public void onError(int error) {
+                    if (holdAwaitingFinal) {
+                        // stopListening 后有的识别器回 NO_MATCH/SPEECH_TIMEOUT，用最后的部分结果兜底
+                        finishVoiceHold(holdLastText);
+                        return;
+                    }
+                    if (!holdActive) return;
+                    String msg;
+                    switch (error) {
+                        case android.speech.SpeechRecognizer.ERROR_NO_MATCH:
+                            msg = "没听清，请再试一次";
+                            break;
+                        case android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT:
+                            msg = "没有检测到说话";
+                            break;
+                        case android.speech.SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS:
+                            msg = "请在系统设置里允许「麦克风」";
+                            break;
+                        case android.speech.SpeechRecognizer.ERROR_NETWORK:
+                        case android.speech.SpeechRecognizer.ERROR_NETWORK_TIMEOUT:
+                            msg = "识别服务网络异常，请重试";
+                            break;
+                        default:
+                            msg = "识别出错，请再试一次";
+                    }
+                    failVoiceHold(msg);
+                }
+            });
+
+            Intent i = new Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            i.putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                    android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            i.putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "zh-CN");
+            i.putExtra(android.speech.RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+            i.putExtra(android.speech.RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+            holdRecognizer.startListening(i);
+
+            // 最长 30 秒自动按「松开」处理
+            holdTimeout = () -> {
+                if (holdActive) releaseVoiceHold(false);
+            };
+            holdHandler.postDelayed(holdTimeout, 30000);
+        } catch (Exception e) {
+            Log.w(TAG, "hold voice start failed", e);
+            failVoiceHold("语音启动失败，请重试");
+        }
+    }
+
+    void releaseVoiceHold(boolean cancel) {
+        holdHandler.removeCallbacks(holdTimeout);
+        holdTimeout = null;
+        if (holdRecognizer == null) {
+            if (cancel) evaluateJs("ccAiVoiceCancel()");
+            return;
+        }
+        if (cancel) {
+            holdActive = false;
+            holdAwaitingFinal = false;
+            destroyHoldRecognizer();
+            evaluateJs("ccAiVoiceCancel()");
+            return;
+        }
+        holdActive = false;
+        holdAwaitingFinal = true;
+        try {
+            holdRecognizer.stopListening();
+        } catch (Exception ignored) {
+        }
+        // 3 秒兜底：最终结果迟迟不来就用最后的部分结果
+        holdFinalFallback = () -> {
+            if (holdAwaitingFinal) finishVoiceHold(holdLastText);
+        };
+        holdHandler.postDelayed(holdFinalFallback, 3000);
+    }
+
+    private void finishVoiceHold(String text) {
+        holdHandler.removeCallbacks(holdFinalFallback);
+        holdFinalFallback = null;
+        if (!holdActive && !holdAwaitingFinal) return;
+        holdActive = false;
+        holdAwaitingFinal = false;
+        destroyHoldRecognizer();
+        String t = text == null ? "" : text.trim();
+        evaluateJs("ccAiVoiceResult(" + org.json.JSONObject.quote(t) + ")");
+    }
+
+    private void failVoiceHold(String reason) {
+        holdHandler.removeCallbacks(holdTimeout);
+        holdTimeout = null;
+        holdHandler.removeCallbacks(holdFinalFallback);
+        holdFinalFallback = null;
+        holdActive = false;
+        holdAwaitingFinal = false;
+        destroyHoldRecognizer();
+        android.widget.Toast.makeText(this, reason, android.widget.Toast.LENGTH_SHORT).show();
+        evaluateJs("ccAiVoiceCancel()");
+    }
+
+    private void destroyHoldRecognizer() {
+        if (holdRecognizer != null) {
+            try {
+                holdRecognizer.destroy();
+            } catch (Exception ignored) {
+            }
+            holdRecognizer = null;
+        }
+    }
+
+    private static String firstRecognition(Bundle bundle) {
+        if (bundle == null) return null;
+        java.util.ArrayList<String> list = bundle.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION);
+        if (list == null || list.isEmpty()) return null;
+        String s = list.get(0);
+        return s == null ? null : s.trim();
+    }
+
     // ------------------------------------------------------------ 生命周期
 
     @Override
@@ -442,6 +628,8 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        holdHandler.removeCallbacksAndMessages(null);
+        destroyHoldRecognizer();
         if (server != null) server.stop();
         if (web != null) {
             web.removeJavascriptInterface("CarCareAndroid");
