@@ -5,6 +5,10 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- 保养到期提醒：Android 13 起发通知需运行时授权 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 关机重启后重新排定闹钟（AlarmManager 的闹钟不跨重启） -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Android 12+ 的精确闹钟：没授权时自动退回「大致时间」，仍然会提醒 -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <!-- 拍照上传凭证走系统相机，不申请相机权限（由相机 App 自己授权） -->
     <queries>
@@ -14,6 +18,10 @@
         <intent>
             <action android:name="android.intent.action.SEND" />
             <data android:mimeType="*/*" />
+        </intent>
+        <!-- 语音记账：调系统语音识别（不申请录音权限，由识别器自己处理） -->
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
         </intent>
     </queries>
 
@@ -52,6 +60,39 @@
             android:exported="false"
             android:theme="@style/ViewerTheme"
             android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- 定时提醒：闹钟到点发通知 -->
+        <receiver
+            android:name=".AlarmReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.zsonit.carcare.ALARM" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 开机/更新后重排闹钟并刷新小组件 -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 桌面小组件：下次保养倒计时 -->
+        <receiver
+            android:name=".CarWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info" />
+        </receiver>
     </application>
 
 </manifest>

@@ -5,7 +5,7 @@ set -e
 cd "$(dirname "$0")/.."
 SRC="${1:-../carcare-ios/Resources/web}"
 DST="app/src/main/assets/web"
-for f in index.html manifest.json sw.js icon-192.png icon-512.png; do
+for f in index.html cc-ext.js manifest.json sw.js icon-192.png icon-512.png; do
   cp "$SRC/$f" "$DST/$f"
   echo "synced $f"
 done

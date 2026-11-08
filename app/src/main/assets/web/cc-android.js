@@ -47,7 +47,9 @@
         '.fab{bottom:calc(96px + ' + bottom + 'px)!important}' +
         'nav{bottom:calc(8px + ' + bottom + 'px)!important}' +
         '.toast{bottom:calc(104px + ' + bottom + 'px)!important}' +
-        '.modal .sheet{padding-bottom:calc(20px + ' + bottom + 'px)!important}';
+        '.modal .sheet{padding-bottom:calc(20px + ' + bottom + 'px)!important}' +
+        '.page-head{padding-top:calc(10px + ' + top + 'px)!important}' +
+        '.page{padding-bottom:calc(24px + ' + bottom + 'px)!important}';
     } catch (e) {}
   }
   window.__ccApplyInsets = applyInsets;

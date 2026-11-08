@@ -96,6 +96,19 @@ public class CarBridge {
                 case "notifyPermission":
                     act.runOnUiThread(() -> act.requestNotificationPermission());
                     break;
+                case "schedule":
+                    // 网页算好的到期事项 → AlarmManager 定时通知
+                    NotifScheduler.apply(act, o.optJSONArray("items"));
+                    break;
+                case "badge": {
+                    int n = o.optInt("count", 0);
+                    act.runOnUiThread(() -> act.applyBadge(n));
+                    CarWidgetProvider.save(act, n, o.optJSONObject("widget"));
+                    break;
+                }
+                case "voice":
+                    act.runOnUiThread(() -> act.startVoiceInput());
+                    break;
                 default:
                     break;
             }

@@ -43,6 +43,7 @@ public class MainActivity extends Activity {
     private static final String TAG = "CarCare";
     private static final int REQ_FILE = 1001;
     private static final int REQ_NOTIF = 1003;
+    private static final int REQ_VOICE = 1004;
 
     private WebView web;
     private LocalAssetServer server;
@@ -359,6 +360,18 @@ public class MainActivity extends Activity {
             if (bridge != null) bridge.onSaveResult(resultCode, data);
             return;
         }
+        if (requestCode == REQ_VOICE) {
+            if (resultCode == RESULT_OK && data != null) {
+                java.util.ArrayList<String> list =
+                        data.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS);
+                if (list != null && !list.isEmpty()) {
+                    String text = list.get(0);
+                    String js = "ccVoiceResult(" + org.json.JSONObject.quote(text) + ")";
+                    evaluateJs(js);
+                }
+            }
+            return;
+        }
         if (requestCode != REQ_FILE) {
             super.onActivityResult(requestCode, resultCode, data);
             return;
@@ -382,6 +395,32 @@ public class MainActivity extends Activity {
             result = new Uri[]{data.getData()};
         }
         callback.onReceiveValue(result);
+    }
+
+    // ------------------------------------------------------------ 语音记账
+
+    /**
+     * 调系统语音识别（RecognizerIntent）：不申请录音权限，收音与识别都由识别器 App 完成，
+     * 识别结果通过 ccVoiceResult() 回填到网页表单。
+     */
+    void startVoiceInput() {
+        Intent i = new Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        i.putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        i.putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "zh-CN");
+        i.putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "说出内容，如「加油 300 块」");
+        try {
+            startActivityForResult(i, REQ_VOICE);
+        } catch (Exception e) {
+            Log.w(TAG, "voice input unavailable", e);
+            GlassDialog.alert(this, "没找到语音识别服务。可在系统设置里安装/开启「语音服务」后重试。", null);
+        }
+    }
+
+    /** 角标：Android 的桌面数字角标依赖通知，这里只存档（首页用小组件展示），不改动通知栏 */
+    void applyBadge(int count) {
+        getSharedPreferences("carcare_widget", MODE_PRIVATE)
+                .edit().putInt("badge", count).apply();
     }
 
     // ------------------------------------------------------------ 生命周期
