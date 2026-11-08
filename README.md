@@ -9,6 +9,10 @@
 | --- | --- | --- | --- | --- |
 | ![提醒中心](screenshots/1-reminders.jpg) | ![记录](screenshots/2-records.jpg) | ![车库](screenshots/3-garage.jpg) | ![花费](screenshots/4-costs.jpg) | ![设置](screenshots/5-settings.jpg) |
 
+| AI 车况助手 |
+| --- |
+| ![AI 车况助手](screenshots/6-ai.jpg) |
+
 ## 与 iOS 版同一套界面
 
 整站视觉是 iOS 27 液态玻璃（Liquid Glass）：柔和光斑壁纸、`backdrop-filter` 玻璃卡片、
@@ -21,6 +25,49 @@ Android 版直接复用同一份 `index.html`，所以两端像素级一致，�
 | --- | --- |
 | `env(safe-area-inset-*)` 在 WebView 里恒为 0 | 原生读状态栏 / 导航栏高度，换算成 CSS px 注入 6 条 `!important` 规则，顶栏与底部导航才会正确避让刘海和手势条 |
 | 通知权限是运行时授权（Android 13+） | `Notification.requestPermission()` 桥到系统授权弹窗，结果回填给网页的 Promise |
+| 网页直连大模型 API 会被 CORS 拦 | 由 `AIHttp` 用 `HttpURLConnection` 代发，边读流边回吐 `ccAiChunk`，与 iOS 协议一致 |
+
+## 2.4.0：内置 AI 车况助手（读得到全部记录，也动手记账）
+
+把一个大模型接进了 App。它看得到这台车的每一条数据，能回答车况问题、给保养建议，
+也能按你说的一句话直接把记录写进去。
+
+| 能力 | 说明 |
+| --- | --- |
+| 全量数据上下文 | 每次提问自动把当前车辆压成一段紧凑 JSON 交给模型：车辆信息、保养提醒及剩余公里 / 天数、最近 20 条维保、最近 10 次加油与油耗统计、轮胎花纹与胎压、配件保修、证照到期、费用汇总、套餐余额。模型不用猜，也不用你复述 |
+| 车况问诊 | 「现在车况怎么样」「下次该保养什么」「油耗正常吗」→ 先给结论，再给具体数字（还剩多少公里、多少天、上次多少），发现异常主动点出风险 |
+| 动手记账 | 说「昨天加满 313 块 95 号」「把机油改成 6 个月」，模型返回结构化动作，App 渲染成确认卡片，**点「应用」才真正写库**，不会偷偷改你的账 |
+| 可执行动作 | 新增保养 / 维修工单、加油、其它费用、里程打卡、改保养周期、标记某项保养已完成、更新车辆信息、跳转页面 |
+| 流式输出 | 请求走原生代发，SSE 逐字显示，不用等整段生成完 |
+| 免费可用 | 内置 7 家 OpenAI 兼容服务商预设，默认**智谱 GLM-4-Flash（长期免费、国内直连）**；模型名与接口地址都可改，自建网关 / 中转也能接 |
+| 离线兜底 | 没配 Key 也能用：首页卡的「本地体检」按规则算出最紧要的提醒、油耗与最近一次到店，纯本地计算 |
+| 隐私 | API Key 只存这台手机（独立存储，不进数据备份、不上传任何服务器）；对话记录同样只在本机 |
+
+### 支持的服务商（都走 OpenAI 兼容协议，只换地址与模型名）
+
+| 预设 | 默认模型 | 免费情况（以各家控制台为准） |
+| --- | --- | --- |
+| 智谱 GLM | `glm-4-flash` | GLM-4-Flash 长期免费，国内直连，额度够个人日常用 |
+| 硅基流动 | `Qwen/Qwen3-8B` | 十余个小模型永久免费，国内直连 |
+| 火山方舟（豆包） | `doubao-lite-32k` | Lite 每日免费额度较大；模型名要填控制台里的接入点 ID |
+| DeepSeek | `deepseek-chat` | 不免费但极便宜（百万 token 几毛钱） |
+| Groq | `llama-3.3-70b-versatile` | 免费开发者层，需能访问境外网络 |
+| OpenRouter | `deepseek/deepseek-chat-v3.1:free` | 带 `:free` 后缀的模型每天有免费次数 |
+| Google Gemini | `gemini-2.5-flash` | AI Studio 免费层，需能访问境外网络 |
+| 自定义 | — | 任何兼容 `/chat/completions` 的地址 |
+
+### 为什么大模型请求要绕道原生
+
+WebView 里直接 `fetch` 大模型 API 会被 **CORS** 拦死（服务端不返回 `Access-Control-Allow-Origin`）。
+所以网页只负责组装请求，实际发送交给原生：
+
+```
+网页 cc-ai.js  ──{type:'ai',url,headers,body}──▶  iOS AIClient / Android AIHttp
+                                                        │  URLSession / HttpURLConnection
+                                                        ▼
+                                              边收边回吐 ccAiChunk(id,text)
+网页解析 SSE 的 data: 行，逐字渲染 ◀──────────────────────────┘
+```
 
 ## 2.3.0：从「保养记录本」升级成完整的养车工具
 
@@ -113,7 +160,7 @@ keystore/                  发布签名（多机 / CI 出的包签名一致，�
 本机（Windows，无需安装 Android Studio）：
 
 ```bash
-./tools/build.sh        # 产物：dist/CheGuanJia-Android-v2.3.0-b3.apk
+./tools/build.sh        # 产物：dist/CheGuanJia-Android-v2.4.0-b4.apk
 ```
 
 或推到 GitHub 让 Actions 出包：`git push origin main` → Actions → `carcare-android-apk`。
@@ -123,7 +170,7 @@ keystore/                  发布签名（多机 / CI 出的包签名一致，�
 
 ## 安装
 
-`dist/CheGuanJia-Android-v2.3.0-b3.apk` 直接发到手机安装即可（允许「未知来源」）。
+`dist/CheGuanJia-Android-v2.4.0-b4.apk` 直接发到手机安装即可（允许「未知来源」）。
 包名 `com.zsonit.carcare`，与 iOS 版 bundle id 对应，和上游的 `com.kenowong.carcare`
 是两个独立 App（可共存，数据互不影响）。
 
