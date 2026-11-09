@@ -335,7 +335,7 @@ public class MainActivity extends Activity {
                 fetchLocation();
             } else {
                 android.widget.Toast.makeText(this, "未允许定位，可用城市列表查油价", android.widget.Toast.LENGTH_SHORT).show();
-                deliverLocation(null);
+                deliverDenied();
             }
         }
     }
@@ -730,6 +730,12 @@ public class MainActivity extends Activity {
         new android.os.Handler(getMainLooper()).postDelayed(() -> {
             if (!locDone) deliverLocation(null);
         }, 8000);
+    }
+
+    private void deliverDenied() {
+        if (locDone) return;
+        locDone = true;
+        evaluateJs("window.ccGeoResult && window.ccGeoResult({denied:1})");
     }
 
     private void deliverLocation(Location l) {
