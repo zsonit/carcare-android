@@ -27,6 +27,10 @@ Android 版直接复用同一份 `index.html`，所以两端像素级一致，�
 | 通知权限是运行时授权（Android 13+） | `Notification.requestPermission()` 桥到系统授权弹窗，结果回填给网页的 Promise |
 | 网页直连大模型 API 会被 CORS 拦 | 由 `AIHttp` 用 `HttpURLConnection` 代发，边读流边回吐 `ccAiChunk`，与 iOS 协议一致 |
 
+## 2.6.4：图标全新设计「盾 · 光」
+
+与 iOS 同步的全新图标：黑曜石底玻璃盾徽 + 透视道路灯点符号。
+
 ## 2.6.3：AI选车增加座位数选项
 
 选车表单在车型与用途之间新增「座位数」chip（不限/5座/6座/7座及以上），推荐结果会考虑座位需求。

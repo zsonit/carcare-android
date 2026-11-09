@@ -46,7 +46,7 @@ def split_layers(svg_text):
     """把 SVG 拆成「背景层」与「前景层」（前者只有渐变底，后者只要盾牌）"""
     marker = "<!-- 背景 -->"
     i = svg_text.index(marker)
-    j = svg_text.index("<!-- 玻璃盾牌 -->")
+    j = svg_text.index("<!-- 盾徽投影 -->")
     head = svg_text[:i]
     bg_block = svg_text[i:j]
     body = svg_text[j:]
