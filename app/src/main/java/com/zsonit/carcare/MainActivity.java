@@ -182,6 +182,14 @@ public class MainActivity extends Activity {
                     }
                     return true;
                 }
+                // 极速救援：tel: 调起系统拨号盘（不自动拨出）
+                if ("tel".equals(scheme)) {
+                    try {
+                        startActivity(new Intent(Intent.ACTION_DIAL, url));
+                    } catch (Exception ignored) {
+                    }
+                    return true;
+                }
                 return false;
             }
 
