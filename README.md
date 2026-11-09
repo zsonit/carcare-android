@@ -238,7 +238,7 @@ keystore/                  发布签名（多机 / CI 出的包签名一致，�
 本机（Windows，无需安装 Android Studio）：
 
 ```bash
-./tools/build.sh        # 产物：dist/CheGuanJia-Android-v2.7.2-b19.apk
+./tools/build.sh        # 产物：dist/CheGuanJia-Android-v2.7.3-b20.apk
 ```
 
 或推到 GitHub 让 Actions 出包：`git push origin main` → Actions → `carcare-android-apk`。
@@ -250,7 +250,7 @@ keystore/                  发布签名（多机 / CI 出的包签名一致，�
 
 **正式发布版统一在 [carcare-ios Releases](https://github.com/zsonit/carcare-ios/releases/latest) 下载**（IPA 与 APK 在同一地址）。
 
-自己构建的话，`dist/CheGuanJia-Android-v2.7.2-b19.apk` 直接发到手机安装即可（允许「未知来源」）。
+自己构建的话，`dist/CheGuanJia-Android-v2.7.3-b20.apk` 直接发到手机安装即可（允许「未知来源」）。
 包名 `com.zsonit.carcare`，与 iOS 版 bundle id 对应，和上游的 `com.kenowong.carcare`
 是两个独立 App（可共存，数据互不影响）。
 
