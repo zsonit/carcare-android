@@ -27,6 +27,10 @@ Android 版直接复用同一份 `index.html`，所以两端像素级一致，�
 | 通知权限是运行时授权（Android 13+） | `Notification.requestPermission()` 桥到系统授权弹窗，结果回填给网页的 Promise |
 | 网页直连大模型 API 会被 CORS 拦 | 由 `AIHttp` 用 `HttpURLConnection` 代发，边读流边回吐 `ccAiChunk`，与 iOS 协议一致 |
 
+## 2.6.3：AI选车增加座位数选项
+
+选车表单在车型与用途之间新增「座位数」chip（不限/5座/6座/7座及以上），推荐结果会考虑座位需求。
+
 ## 2.6.2：修复服务弹层选项按钮无法点选
 
 AI选车、AI旧车估价等弹层里的选项 chip（能源/车型/用途/车况）此前没有绑定点击事件，现统一修复，所有弹层选项均可正常点选。
