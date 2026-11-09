@@ -125,6 +125,22 @@ public class CarBridge {
                 case "aiAbort":
                     AIHttp.cancel(o.optString("id"));
                     break;
+                case "httpGet":
+                    // 公开接口（油价等）由原生代发，绕过 WebView 跨域限制
+                    nativeGet(o.optString("url"), o.optString("cb"));
+                    break;
+                case "getLocation":
+                    act.runOnUiThread(() -> act.fetchLocation());
+                    break;
+                case "openUrl":
+                    // 打开外部链接（如高德地图查看附近加油站挂牌价）
+                    try {
+                        Intent it = new Intent(Intent.ACTION_VIEW, Uri.parse(o.optString("url")));
+                        it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        act.startActivity(it);
+                    } catch (Exception ignored) {
+                    }
+                    break;
                 default:
                     break;
             }
@@ -290,5 +306,35 @@ public class CarBridge {
     void onNotificationPermission(boolean granted) {
         act.evaluateJs("window.__ccNotifyPermission&&window.__ccNotifyPermission('"
                 + (granted ? "granted" : "denied") + "')");
+    }
+
+    // ------------------------------------------------------------ 通用 GET
+
+    /** 后台线程拉一次 HTTP GET，把响应文本回填给网页的回调函数（cb 为网页里的函数名） */
+    private void nativeGet(final String url, final String cb) {
+        if (cb == null || cb.isEmpty() || url == null || url.isEmpty()) return;
+        new Thread(() -> {
+            String body = "";
+            java.net.HttpURLConnection conn = null;
+            try {
+                conn = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                conn.setConnectTimeout(10000);
+                conn.setReadTimeout(10000);
+                conn.setRequestProperty("User-Agent", "CheGuanJia/2.7 (Android)");
+                java.io.BufferedReader rd = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = rd.readLine()) != null) sb.append(line).append('\n');
+                rd.close();
+                body = sb.toString();
+            } catch (Exception e) {
+                Log.w(TAG, "httpGet failed: " + url, e);
+            } finally {
+                if (conn != null) conn.disconnect();
+            }
+            final String out = JSONObject.quote(body);
+            act.evaluateJs(cb + " && " + cb + "(" + out + ")");
+        }).start();
     }
 }

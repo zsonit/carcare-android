@@ -13,6 +13,8 @@
     <!-- 拍照上传凭证走系统相机，不申请相机权限（由相机 App 自己授权） -->
     <!-- AI 对话按住说话：应用内识别需要本 App 录音权限（语音记账仍走系统识别器，无需权限） -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
     <queries>
         <intent>

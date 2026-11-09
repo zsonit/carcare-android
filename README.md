@@ -27,6 +27,13 @@ Android 版直接复用同一份 `index.html`，所以两端像素级一致，�
 | 通知权限是运行时授权（Android 13+） | `Notification.requestPermission()` 桥到系统授权弹窗，结果回填给网页的 Promise |
 | 网页直连大模型 API 会被 CORS 拦 | 由 `AIHttp` 用 `HttpURLConnection` 代发，边读流边回吐 `ccAiChunk`，与 iOS 协议一致 |
 
+## 2.7.0：油价接真实数据 + 定位附近加油站
+
+- 城市油价改为调用公开调价数据接口（免密钥），展示最近一次国家调价后的 92/95/98/89号汽油与0号柴油价格及涨跌幅度、调价日期；接口异常自动回退 AI 估算
+- 新增「📍 定位附近加油站」：原生单次定位（iOS CoreLocation / Android LocationManager，运行时权限），跳转高德地图查看附近加油站实时挂牌价，并自动识别所在省份查询本省油价（识别失败不影响看地图）
+- 新增原生 httpGet 桥（URLSession / HttpURLConnection），App 内第三方公开接口请求不再受 WebView 跨域限制；浏览器版自动降级为 fetch
+- iOS 新增定位权限说明；Android 新增 ACCESS_FINE/COARSE_LOCATION 权限
+
 ## 2.6.9：估价逻辑修正（防虚高）
 
 - 系统提示词重写：要求按真实成交行情定价，严禁按新车指导价机械折旧；宁低勿高

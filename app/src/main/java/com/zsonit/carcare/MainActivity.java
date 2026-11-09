@@ -10,6 +10,9 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Parcelable;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.provider.MediaStore;
 import android.util.Log;
 import android.view.KeyEvent;
@@ -45,6 +48,7 @@ public class MainActivity extends Activity {
     private static final int REQ_NOTIF = 1003;
     private static final int REQ_VOICE = 1004;
     private static final int REQ_HOLD_VOICE = 1005;
+    private static final int REQ_LOC = 1006;
 
     private WebView web;
     private LocalAssetServer server;
@@ -324,6 +328,15 @@ public class MainActivity extends Activity {
             android.widget.Toast.makeText(this,
                     granted ? "已允许麦克风，再按一次即可说话" : "未允许麦克风，按住说话不可用",
                     android.widget.Toast.LENGTH_SHORT).show();
+        }
+        if (requestCode == REQ_LOC) {
+            boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+            if (granted) {
+                fetchLocation();
+            } else {
+                android.widget.Toast.makeText(this, "未允许定位，可用城市列表查油价", android.widget.Toast.LENGTH_SHORT).show();
+                deliverLocation(null);
+            }
         }
     }
 
@@ -662,5 +675,72 @@ public class MainActivity extends Activity {
             }
             getWindow().getDecorView().setSystemUiVisibility(flags);
         }
+    }
+
+    // ------------------------------------------------------------ 定位（附近加油站）
+
+    private volatile boolean locDone = false;
+
+    /** 拿一次当前坐标：先看 10 分钟内的缓存，没有再请求单次定位，8 秒拿不到就回调空 */
+    void fetchLocation() {
+        boolean fine = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        boolean coarse = checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        if (!fine && !coarse) {
+            requestPermissions(new String[]{
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION}, REQ_LOC);
+            return;
+        }
+        locDone = false;
+        LocationManager lm = (LocationManager) getSystemService(LOCATION_SERVICE);
+        if (lm == null) {
+            deliverLocation(null);
+            return;
+        }
+        Location best = null;
+        for (String p : new String[]{LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER, LocationManager.PASSIVE_PROVIDER}) {
+            try {
+                Location l = lm.getLastKnownLocation(p);
+                if (l != null && (best == null || l.getTime() > best.getTime())) best = l;
+            } catch (SecurityException ignored) {
+            } catch (Exception ignored) {
+            }
+        }
+        if (best != null && System.currentTimeMillis() - best.getTime() < 10 * 60 * 1000L) {
+            deliverLocation(best);
+            return;
+        }
+        try {
+            String provider = lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+                    ? LocationManager.NETWORK_PROVIDER : LocationManager.GPS_PROVIDER;
+            lm.requestSingleUpdate(provider, new LocationListener() {
+                @Override
+                public void onLocationChanged(Location location) {
+                    deliverLocation(location);
+                }
+            }, getMainLooper());
+        } catch (Exception e) {
+            deliverLocation(best);
+            return;
+        }
+        if (best != null) {
+            // 有旧缓存先给出去，避免用户干等
+            deliverLocation(best);
+        }
+        new android.os.Handler(getMainLooper()).postDelayed(() -> {
+            if (!locDone) deliverLocation(null);
+        }, 8000);
+    }
+
+    private void deliverLocation(Location l) {
+        if (locDone) return;
+        locDone = true;
+        if (l == null) {
+            evaluateJs("window.ccGeoResult && window.ccGeoResult(null)");
+            return;
+        }
+        String lat = String.format(Locale.US, "%.5f", l.getLatitude());
+        String lon = String.format(Locale.US, "%.5f", l.getLongitude());
+        evaluateJs("window.ccGeoResult && window.ccGeoResult({lat:" + lat + ",lon:" + lon + "})");
     }
 }
