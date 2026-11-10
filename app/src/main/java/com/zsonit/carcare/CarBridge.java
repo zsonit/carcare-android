@@ -129,6 +129,10 @@ public class CarBridge {
                     // 公开接口（油价等）由原生代发，绕过 WebView 跨域限制
                     nativeGet(o.optString("url"), o.optString("cb"));
                     break;
+                case "httpReq":
+                    // 通用请求（车牌查车等第三方接口）：自定义 header / POST / multipart
+                    nativeReq(o);
+                    break;
                 case "getLocation":
                     act.runOnUiThread(() -> act.fetchLocation());
                     break;
@@ -308,8 +312,86 @@ public class CarBridge {
                 + (granted ? "granted" : "denied") + "')");
     }
 
-    // ------------------------------------------------------------ 通用 GET
+    /** 通用 HTTP 请求：GET/POST、自定义 header、json / urlencoded / multipart，用于车牌查车等第三方接口 */
+    private void nativeReq(final JSONObject o) {
+        final String cb = o.optString("cb");
+        final String url = o.optString("url");
+        final String method = o.optString("method", "GET").toUpperCase();
+        final JSONObject hs = o.optJSONObject("headers");
+        final JSONObject fields = o.optJSONObject("fields");
+        final String ct = o.optString("ct", "application/json");
+        final String bodyStr = o.optString("body", "");
+        if (cb.isEmpty() || url.isEmpty()) return;
+        new Thread(() -> {
+            String body = "";
+            java.net.HttpURLConnection conn = null;
+            try {
+                conn = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                conn.setConnectTimeout(12000);
+                conn.setReadTimeout(15000);
+                conn.setRequestMethod(method);
+                conn.setRequestProperty("User-Agent", "CheGuanJia/2.8 (Android)");
+                if (hs != null) {
+                    for (java.util.Iterator<String> it = hs.keys(); it.hasNext(); ) {
+                        String k = it.next();
+                        conn.setRequestProperty(k, hs.optString(k));
+                    }
+                }
+                if (!"GET".equals(method)) {
+                    conn.setDoOutput(true);
+                    byte[] payload;
+                    if ("multipart".equals(ct) && fields != null) {
+                        String bd = "----CCForm" + System.currentTimeMillis();
+                        StringBuilder sb = new StringBuilder();
+                        for (java.util.Iterator<String> it = fields.keys(); it.hasNext(); ) {
+                            String k = it.next();
+                            sb.append("--").append(bd).append("\r\n")
+                              .append("Content-Disposition: form-data; name=\"").append(k).append("\"\r\n\r\n")
+                              .append(fields.optString(k)).append("\r\n");
+                        }
+                        sb.append("--").append(bd).append("--\r\n");
+                        conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + bd);
+                        payload = sb.toString().getBytes(StandardCharsets.UTF_8);
+                    } else {
+                        conn.setRequestProperty("Content-Type", ct);
+                        payload = bodyStr.getBytes(StandardCharsets.UTF_8);
+                    }
+                    java.io.OutputStream os = conn.getOutputStream();
+                    os.write(payload);
+                    os.flush();
+                    os.close();
+                }
+                java.io.BufferedReader rd = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
+                StringBuilder sb2 = new StringBuilder();
+                String line;
+                while ((line = rd.readLine()) != null) sb2.append(line).append('\n');
+                rd.close();
+                body = sb2.toString();
+            } catch (Exception e) {
+                Log.w(TAG, "httpReq failed: " + url, e);
+                try {
+                    if (conn != null && conn.getErrorStream() != null) {
+                        java.io.BufferedReader er = new java.io.BufferedReader(
+                                new java.io.InputStreamReader(conn.getErrorStream(), StandardCharsets.UTF_8));
+                        StringBuilder eb = new StringBuilder();
+                        String el;
+                        while ((el = er.readLine()) != null) eb.append(el).append('\n');
+                        er.close();
+                        body = eb.toString();
+                    } else {
+                        body = "";
+                    }
+                } catch (Exception ignore) { body = ""; }
+            } finally {
+                if (conn != null) conn.disconnect();
+            }
+            final String out = JSONObject.quote(body);
+            act.evaluateJs(cb + " && " + cb + "(" + out + ")");
+        }).start();
+    }
 
+    // ------------------------------------------------------------ 通用 GET
     /** 后台线程拉一次 HTTP GET，把响应文本回填给网页的回调函数（cb 为网页里的函数名） */
     private void nativeGet(final String url, final String cb) {
         if (cb == null || cb.isEmpty() || url == null || url.isEmpty()) return;

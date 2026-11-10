@@ -17,8 +17,8 @@ android {
         applicationId "com.zsonit.carcare"
         minSdk 24
         targetSdk 34
-        versionCode 33
-        versionName "2.8.6"
+        versionCode 34
+        versionName "2.8.7"
         resourceConfigurations += ['zh', 'en']
     }
 
